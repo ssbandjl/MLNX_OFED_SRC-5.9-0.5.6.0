@@ -1,0 +1,92 @@
+.TH MLXDEVM 8 "28 Feb 2021" "iproute2" "Linux"
+.SH NAME
+mlxdevm \- mlxdevm tool
+.SH SYNOPSIS
+.sp
+.ad l
+.in +8
+.ti -8
+.B mlxdevm
+.RI "[ " OPTIONS " ] { " dev | port " } { " COMMAND " | "
+.BR help " }"
+.sp
+
+.ti -8
+.B mlxdevm
+.RB "[ " -force " ] "
+.BI "-batch " filename
+.sp
+
+.SH OPTIONS
+
+.TP
+.BR "\-V" , " --Version"
+Print the version of the
+.B mlxdevm
+utility and exit.
+
+.TP
+.BR "\-b", " \-batch " <FILENAME>
+Read commands from provided file or standard input and invoke them.
+First failure will cause termination of mlxdevm.
+
+.TP
+.B \-force
+Don't terminate mlxdevm on errors in batch mode.
+If there were any errors during execution of the commands, the application return code will be non zero.
+
+.TP
+.BR "\-n" , " --no-nice-names"
+Turn off printing out nice names, for example netdevice ifnames instead of mlxdevm port identification.
+
+.TP
+.BR "\-j" , " --json"
+Generate JSON output.
+
+.TP
+.BR "\-p" , " --pretty"
+When combined with -j generate a pretty JSON output.
+
+.TP
+.BR "\-v" , " --verbose"
+Turn on verbose output.
+
+.SS
+.I OBJECT
+
+.TP
+.B dev
+- mlxdevm device.
+
+.TP
+.B port
+- mlxdevm port.
+
+.SS
+.I COMMAND
+
+Specifies the action to perform on the object.
+The set of possible actions depends on the object type.
+As a rule, it is possible to
+.B show
+(or
+.B list
+) objects, but some objects do not allow all of these operations
+or have some additional commands. The
+.B help
+command is available for all objects. It prints
+out a list of available commands and argument syntax conventions.
+.sp
+If no command is given, some default command is assumed.
+Usually it is
+.B list
+or, if the objects of this class cannot be listed,
+.BR "help" .
+
+.SH EXIT STATUS
+Exit status is 0 if command was successful or a positive integer upon failure.
+
+.SH SEE ALSO
+.BR mlxdevm-dev (8),
+.BR mlxdevm-port (8)
+.br

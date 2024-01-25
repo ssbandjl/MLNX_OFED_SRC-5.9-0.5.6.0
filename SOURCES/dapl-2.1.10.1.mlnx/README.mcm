@@ -1,0 +1,135 @@
+		uDAPL MCM Provider and MPXYD Daemon (CCL-proxy) 
+		   
+	MCM is a new uDAPL provider that is an extension to standard DAT 2.0 libraries. The purpose of this service
+	is to proxy RDMA writes from the MIC to the HOST to improve large IO performance. The provider will support
+	MIC to MIC, HOST to HOST, and MIC to HOST environments. The mcm client will NOT use MPXYD when running on the host.
+	It requires a new MPXYD daemon service when clients are running on a MIC KNC adapter. This package installs all the
+	host side libraries and daemon service. The MIC libraries must be built and moved over to MIC adapter. This verion
+	is currently included with MPSS and all libraries and services will be installed by default.
+	
+	=================
+	1.0 Release Notes
+	=================
+	
+	Current release package: dapl-2.1.6.tar.gz 
+	
+	dapl-2.1.6 changes include MIC support for full offload mode
+	
+	- Add support for Truescale qib devices with no CCL Direct verbs support on MIC.
+	- Enhancement for inside the box transfers without IB adapter via ibscif.
+	- Add DAPL_NETWORK_NODES, DAPL_NETWORK_PPN environment variables. 
+
+	============================================================
+	2.0 MCM Provider, MPXYD Daemon (CCL-proxy) Build and Install
+	============================================================
+
+	* Sample host build from source package (ofed must be installed)
+
+  	./configure --enable-mcm --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
+  	make
+  	make install
+
+	* Sample host rpmbuild/update from release tarball, /root:
+
+	rpmbuild -ta dapl-2.1.6.tar.gz
+	rpm -U /root/rpmbuild/RPMS/x86_64/dapl*
+
+	* Sample MIC build from source package for MPSS 3.x (MPSS must be installed)
+	* Assume /opt is nfs mounted across cluster
+
+  	source /opt/mpss/3.x/environment-setup-k1om-mpss-linux 
+	./configure --enable-mcm --prefix /opt/dapl/mic --host=x86_64-k1om-linux
+	make
+	make install
+
+	copy /opt/dapl/mic/* files out to all MIC cards
+  
+ 
+	* Cluster deployment
+
+  	(1) Build once on the head or on one of the nodes (with MPSS) as described in the above steps.
+
+  	(2) HOST: Install dapl libraries and mpxyd service, "rpm -U" all dapl RPM files on host nodes:
+
+  	(3) MIC: Setup dapl overlay for new package (/opt/intel/dapl):
+	
+		Create /etc/mpss/conf.d/dapl.conf with following entry:
+
+			Overlay Filelist /opt/dapl /opt/dapl/dapl.filelist on
+		
+		Create /opt/dapl/dapl.filelist with following entries: 
+
+			file /etc/dat.conf mic/etc/dat.conf 755 0 0
+			file /usr/bin/dtest mic/bin/dtest 755 0 0
+			file /usr/bin/dtestx mic/bin/dtestx 755 0 0
+			file /usr/bin/dtestcm mic/bin/dtestcm 755 0 0
+			file /usr/bin/dapltest mic/bin/dapltest 755 0 0
+			file /usr/lib64/libdat.so.2.0.0 mic/lib/libdat.so.2.0.0 755 0 0
+			file /usr/lib64/libdaplofa.so.2.0.0 mic/lib/libdaplofa.so.2.0.0 755 0 0
+			file /usr/lib64/libdaplomcm.so.2.0.0 mic/lib/libdaplomcm.so.2.0.0 755 0 0
+			file /usr/lib64/libdaploscm.so.2.0.0 mic/lib/libdaploscm.so.2.0.0 755 0 0
+			file /usr/lib64/libdaploucm.so.2.0.0 mic/lib/libdaploucm.so.2.0.0 755 0 0
+
+			slink /usr/lib64/libdat.so libdat.so.2.0.0 777 0 0
+			slink /usr/lib64/libdat.so.2 libdat.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplofa.so libdaplofa.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplofa.so.2 libdaplofa.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplomcm.so libdaplomcm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplomcm.so.2 libdaplomcm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploscm.so libdaploscm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploscm.so.2 libdaploscm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploucm.so libdaploucm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploucm.so.2 libdaploucm.so.2.0.0 777 0 0
+	
+		Reboot or restart MPSS and ofed-mic services
+
+		Check for dapl overlay
+			micctrl --config  
+
+
+	* Use the MCM provider with Intel MPI 5.1 or greater for best out of box experiences.
+
+  	(1) Recommended settings:
+
+		export I_MPI_MIC=1
+		export I_MPI_DEBUG=2
+		export I_MPI_FALLBACK=0
+  
+	* Setup for non-root CCL Proxy - MPXYD running as process with different service port from your /home directory:
+
+   	Using build instructions above, change prefix as follow and "make install":
+
+   	Build MIC:
+		--prefix=/home/username/ccl-proxy-mic
+
+   	Build host:
+		--prefix=/home/username/ccl-proxy-host
+	
+	edit /home/username/ccl-proxy-host/etc/mpxyd.conf and change the following entries:
+	
+	log_file /var/log/mpxyd.log  	to log_file /tmp/username/mpxyd.log
+	lock_file /var/log/mpxyd.pid 	to lock_file /tmp/username/mpxyd.log
+	scif_port_id 68 		to scif_port_id 1068
+	
+	start the mpxyd process on each node
+	
+	ssh node1-hostname /home/username/ccl-proxy-host/sbin/mpxyd -P -O /home/username/ccl-proxy-host/etc/mpxyd.conf&
+	
+	Note: override default port id using following environment variable:
+	
+	export DAPL_MCM_PORT_ID=1068
+   
+	* Notes
+
+  	(1) Modify "/etc/mpxyd.conf" to change the settings for the proxy. Especially, try different values
+      	of "buffer_segment_size" for performance tuning. Use a smaller value for "buffer_pool_mb"   
+      	to reduce the memory foorprint of mpxyd. Use a larger value for "scif_listen_qlen" to run 
+      	more MPI ranks per card. Also modify mcm_affinity_base to the desired CPU_id to insure
+      	socket to adapter affinity. Best performance when HCA, MIC, and CPU are on same socket.
+      	Default settings are on CPU socket 0.
+
+  	(2) By default, only writes originated from MIC is proxied. However, it is also possible to proxy 
+      	host-originated writes (e.g. for debugging purpose). To do this, set the environment variable
+      	"DAPL_MCM_ALWAYS_PROXY=1". This variable applies to the provider, not the proxy.
+
+

@@ -1,0 +1,181 @@
+dnl Process this file with autoconf to produce a configure script.
+
+AC_PREREQ(2.57)
+AC_INIT(dapl, 2.1.10.1.mlnx, linux-rdma@vger.kernel.org)
+AC_CONFIG_SRCDIR([dat/udat/udat.c])
+AC_CONFIG_AUX_DIR(config)
+AC_CONFIG_MACRO_DIR([m4])
+AM_CONFIG_HEADER(config.h)
+AM_INIT_AUTOMAKE(dapl, 2.1.10.1.mlnx)
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+
+AM_PROG_LIBTOOL
+
+AC_ARG_ENABLE([libcheck],
+  AS_HELP_STRING([--disable-libcheck], [do not test for presence of ib libraries]),
+    [ if test x$enableval = xno ; then
+      disable_libcheck=yes
+    fi ]
+)
+
+dnl Checks for programs
+AC_PROG_CC
+
+dnl Checks for header files and libraries
+if test "$disable_libcheck" != "yes"; then
+  AC_CHECK_HEADER(infiniband/verbs.h, [],
+    AC_MSG_ERROR([<infiniband/verbs.h> not found.  Is libibverbs installed?]))
+  AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h malloc.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h sys/timeb.h syslog.h unistd.h])
+  AC_CHECK_MEMBER(struct ibv_port_attr.link_layer,
+    AM_CONDITIONAL(DEFINE_ATTR_LINK_LAYER, test "yes" = "yes"), 
+    AM_CONDITIONAL(DEFINE_ATTR_LINK_LAYER, test "yes" = "no"), 
+    [#include <infiniband/verbs.h>])
+  AC_CHECK_FUNCS([gethostname gettimeofday inet_ntoa memset select socket strcasecmp strdup strerror strtol sysinfo])
+
+else
+    AM_CONDITIONAL(DEFINE_ATTR_LINK_LAYER, test "yes" = "no")
+fi
+dnl End check for header files and libraries
+
+AC_CACHE_CHECK(whether ld accepts --version-script, ac_cv_version_script,
+    if test -n "`$LD --help < /dev/null 2>/dev/null | grep version-script`"; then
+        ac_cv_version_script=yes
+    else
+        ac_cv_version_script=no
+    fi)
+AM_CONDITIONAL(HAVE_LD_VERSION_SCRIPT, test "$ac_cv_version_script" = "yes")
+
+dnl Support debug mode build - if enable-debug provided the DEBUG variable is set 
+AC_ARG_ENABLE([debug],
+  AS_HELP_STRING([--enable-debug],[enable debug build, default=disabled]),
+  [case "${enableval}" in
+    yes) debug=true ;;
+    no)  debug=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-debug) ;;
+  esac],
+  [debug=false])
+AM_CONDITIONAL(DEBUG, test x$debug = xtrue)
+
+dnl Support for IB acm sevices
+AC_ARG_ENABLE([acm],
+  AS_HELP_STRING([--enable-acm],[enable IB ACM services, default=disabled]),
+  [case "$enableval" in
+    yes)
+        AC_DEFINE(DAPL_USE_IBACM, 1, [set to 1 to use IB ACM services])
+          AC_CHECK_MEMBER(struct ibv_path_record.service_id, [],
+          AC_MSG_ERROR([IB ACM support requires libibverbs 1.1.4 or greater.]),
+          [#include <infiniband/sa.h>])
+        AC_CHECK_HEADER(infiniband/acm.h, [],
+          AC_MSG_ERROR([IB ACM requested but <infiniband/acm.h> not found.]))
+        AC_DEFINE(DAPL_USE_IBACM, 1, [set to 1 to use IB ACM services])
+        acm=true ;;
+    no) acm=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-acm) ;;
+  esac],
+  [acm=false])
+AM_CONDITIONAL(DAPL_USE_IBACM, test x$acm = true)
+
+dnl Support to enable/disable CMA (rdma_cm) provider library build
+AC_ARG_ENABLE([cma], 
+  AS_HELP_STRING([--disable-cma],[disable CMA (rdma_cm) provider build, default=enabled]),
+  [case "${enableval}" in
+    yes) cma=true ;;
+    no)  cma=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-cma) ;; 
+  esac],
+  [cma=true])
+AM_CONDITIONAL(DEFINE_CMA, test x$cma = xtrue)
+
+dnl Support to enable/disable SCM (socket CM) provider library build
+AC_ARG_ENABLE([scm], 
+  AS_HELP_STRING([--disable-scm],[disable SCM (socket cm) provider build, default=enabled]),
+  [case "${enableval}" in
+    yes) scm=true ;;
+    no)  scm=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-scm) ;; 
+  esac],
+  [scm=true])
+AM_CONDITIONAL(DEFINE_SCM, test x$scm = xtrue)
+
+dnl Support to enable/disable UCM (IB UD cm) provider library build
+AC_ARG_ENABLE([ucm], 
+  AS_HELP_STRING([--disable-ucm],[disable UCM (IB UD cm) provider build, default=enabled]),
+  [case "${enableval}" in
+    yes) ucm=true ;;
+    no)  ucm=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-ucm) ;; 
+  esac],
+  [ucm=true])
+AM_CONDITIONAL(DEFINE_UCM, test x$ucm = xtrue)
+
+dnl Support to enable/disable MCM (proxy) MIC SCIF provider library build
+AC_CHECK_HEADER(scif.h, [sciffound=true], [sciffound=false])
+AC_ARG_ENABLE([mcm], 
+  AS_HELP_STRING([--enable-mcm],[enable MCM (proxy CM) SCIF provider build, default=auto]),
+  [case "${enableval}" in
+    yes) AS_IF([test x$sciffound = xtrue], [mcm=true], AC_MSG_ERROR([<scif.h> not found.  Is libscif installed?])) ;;
+    no)  mcm=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-mcm) ;; 
+  esac],
+  [mcm=$sciffound])
+AM_CONDITIONAL(DEFINE_MCM, test x$mcm = xtrue)
+
+dnl Support to enable/disable IB extended counters (CM,LINK,DIAG)
+AC_ARG_ENABLE([counters], 
+  AS_HELP_STRING([--enable-counters],[enable counters provider build, default=disabled]),
+  [case "${enableval}" in
+    yes) counters=true ;;
+    no)  counters=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-counters) ;; 
+  esac],
+  [counters=false])
+AM_CONDITIONAL(DEFINE_COUNTERS, test x$counters = xtrue)
+
+dnl Support ib_extension build - if enable-ext-type == ib 
+AC_ARG_ENABLE([ext-type],
+ AS_HELP_STRING([--enable-ext-type],[enable extensions support for library: ib, none, default=ib]),
+ [ if   test "x$enableval" = "xib" ; then
+      ext_type=ib
+   elif test "x$enableval" = "xnone" ; then
+      ext_type=none
+   else
+      echo
+      echo "Error!"
+      echo "Unknown extension type' type"
+      exit -1
+   fi
+ ],[ext_type=ib])
+AM_CONDITIONAL(EXT_TYPE_IB, test "$ext_type" = "ib")
+
+dnl Support IB MPI collective extension build - if enable-coll-type == vendor_name 
+AC_ARG_ENABLE([coll-type],
+ AS_HELP_STRING([--enable-coll-type],[enable IB collective support: fca, none, default=none]),
+ [ if   test "x$enableval" = "xfca" ; then
+      coll_type=fca
+      AC_CHECK_HEADER(fca/fca_api.h, [],
+        AC_MSG_ERROR([<fca/fca_api.h> not found. Is libfca devel package installed?]))
+      AC_CHECK_LIB(fca, fca_init, [],
+        AC_MSG_ERROR([fca_init() not found. Is libfca library installed?]))
+   elif test "x$enableval" = "xnone" ; then
+      coll_type=none
+   else
+      echo
+      echo "Error!"
+      echo "Unknown IB collective type' type"
+      exit -1
+   fi
+ ],[coll_type=none])
+AM_CONDITIONAL(COLL_TYPE_FCA, test "$coll_type" = "fca")
+
+dnl Check for SuSE release 11
+AC_CACHE_CHECK(Check for SUSE_11 system, ac_cv_suse11,
+    if test -f /etc/SuSE-release &&
+       test -n "`grep -e "VERSION = 11" /etc/SuSE-release`"; then
+        ac_cv_suse11=yes
+    else
+        ac_cv_suse11=no
+    fi)
+AM_CONDITIONAL(OS_SUSE11, test "$ac_cv_suse11" = "yes")
+
+AC_CONFIG_FILES([Makefile test/dtest/Makefile test/dapltest/Makefile dapl.spec mpxyd.init])
+AC_OUTPUT

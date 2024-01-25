@@ -1,0 +1,216 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2019 Mellanox Technologies. All Rights Reserved.
+#
+
+Name: rshim
+Version: @VERSION@
+Release: 18%{?dist}
+Summary: User-space driver for Mellanox BlueField SoC
+
+License: GPLv2
+
+URL: https://github.com/mellanox/rshim-user-space
+Source0: https://github.com/Mellanox/rshim-user-space/releases/download/%{name}-%{version}/%{name}-%{version}.tar.gz
+
+BuildRequires: gcc, autoconf, automake, make
+BuildRequires: pkgconfig(libpci), pkgconfig(libusb-1.0), pkgconfig(fuse)
+BuildRequires: systemd
+BuildRequires: systemd-rpm-macros
+
+Requires: kmod(cuse.ko)
+Suggests: kernel-modules-extra
+
+%description
+This is the user-space driver to access the BlueField SoC via the rshim
+interface. It provides ways to push boot stream, debug the target or login
+via the virtual console or network interface.
+
+%prep
+%setup -q -n %{name}-%{version}
+
+%build
+./bootstrap.sh
+%configure
+%make_build
+
+%install
+%make_install
+
+%post
+%systemd_post rshim.service
+
+%preun
+%systemd_preun rshim.service
+
+%postun
+%systemd_postun_with_restart rshim.service
+
+%files
+%license LICENSE
+%doc README.md
+%config(noreplace) %{_sysconfdir}/rshim.conf
+%{_sbindir}/rshim
+%{_unitdir}/rshim.service
+%{_mandir}/man8/rshim.8.gz
+
+%changelog
+* Tue Oct 25 2022 Liming Sun <limings@nvidia.com> - 2.0.6-18
+- pcie: fix initialization issue when setting DROP_MODE in rshim.conf
+
+* Thu Oct 20 2022 Liming Sun <limings@nvidia.com> - 2.0.6-17
+- pcie: Avoid using cached pci_dev
+- rshim_fuse: display misc file even when rshim is not accessible
+
+* Thu Oct 06 2022 Liming Sun <limings@nvidia.com> - 2.0.6-16
+- pcie: Support mixed vfio and direct mapping mode
+
+* Thu Sep 29 2022 Liming Sun <limings@nvidia.com> - 2.0.6-15
+- Add dependency of libfuse2 for .deb
+- rshim-pcie: add a new bad-access code
+- Fix a potential NULL pointer access during USB disconnect
+- Adjust default boot timeout to 150s
+
+* Tue Aug 16 2022 Liming Sun <limings@nvidia.com> - 2.0.6-14
+- Avoid potential race when stopping the rshim process
+- Add configuration option to enable/disable PCIe VFIO/UIO
+- Fix warnings for compiling on 32-bit BMC
+- Mustang rshim usb supports for 4B and 8B transactions
+
+* Sun Jul 17 2022 Liming Sun <limings@nvidia.com> - 2.0.6-13
+- BF3: Support 32-bit CR-space access via USB
+- Avoid kernel-modules-extra dependency on ctyunos
+
+* Thu Jun 16 2022 Liming Sun <limings@nvidia.com> - 2.0.6-12
+- Optimize the rshim_work_fd
+- Detect new USB/rshim hot plugin
+
+* Mon May 16 2022 Liming Sun <limings@nvidia.com> - 2.0.6-11
+- Avoid kernel crash when unbind rshim from uio
+
+* Mon May 02 2022 Liming Sun <limings@nvidia.com> - 2.0.6-10
+- Fix several compiling issues for FreeBSD
+
+* Thu Apr 28 2022 Liming Sun <limings@nvidia.com> - 2.0.6-9
+- Use per-device memory-map mode
+
+* Mon Apr 18 2022 Liming Sun <limings@nvidia.com> - 2.0.6-8
+- Add interrupt polling for direct mmap() mode
+- Fix several coverity warnings
+
+* Thu Apr 07 2022 Liming Sun <limings@nvidia.com> - 2.0.6-7
+- Keep intr_fd during rshim_pcie disable/enable
+- Mustang: Add support for rshim over pcie and pcie_lf
+
+* Wed Mar 30 2022 Liming Sun <limings@nvidia.com> - 2.0.6-6
+- Clear scratchpad1 to 0 before PCI resources are unmapped
+- Fallback to UIO if VFIO failed
+
+* Fri Mar 18 2022 Liming Sun <limings@nvidia.com> - 2.0.6-5
+- PCIe: Add UIO and IRQ support
+- PCIe: Remove 32-bit support
+
+* Mon Feb 28 2022 Liming Sun <limings@nvidia.com> - 2.0.6-4
+- VFIO support
+- Fix potential race in rshim_work_signal
+
+* Mon Nov 29 2021 Liming Sun <limings@nvidia.com> - 2.0.6-3
+- Adjust the defaul value of usb_reset_delay to 5
+- Add a delay after USB probe
+- Make the reset delay configurable
+
+* Wed Nov 03 2021 Liming Sun <limings@nvidia.com> - 2.0.6-2
+- bfb-install: Handle new indications for installation completion
+- Clean up some un-needed register definition
+- Fix MTU of the tmfifo_net0 interface on FreeBSD
+- Several fixes to prevent hypervisor crash
+- Refine some BF-2 Rev0 workaround condition
+
+* Wed May 12 2021 Liming Sun <limings@nvidia.com> - 2.0.6-1
+- Disable the background timer if no rshim devices
+- Setting default path for rshim config file
+
+* Wed Mar 10 2021 Liming Sun <limings@nvidia.com> - 2.0.5-10
+- PCIe hotplug support
+- Reduce CPU utilization when there is no rshim device
+
+* Wed Jan 27 2021 Liming Sun <limings@nvidia.com> - 2.0.5-9
+- Fix potential tmfifo data loss
+- Add workaround checking for Bluefield-2 REV-0
+- Fix network traffic stop issue when Tx buffer full
+
+* Fri Dec 11 2020 Liming Sun <limings@nvidia.com> - 2.0.5-8
+- Don't allow any register access when DROP_MODE is set
+- Avoid potential race in rshim_fifo_read
+
+* Wed Dec 09 2020 Liming Sun <limings@nvidia.com> - 2.0.5-7
+- Fix potential dead-lock when calling rshim_access_check
+- Ignore rshim access checking when global drop mode is enabled
+- Fix some secure boot related issue
+
+* Wed Dec 02 2020 Liming Sun <limings@nvidia.com> - 2.0.5-6
+- Add some default configuration in rshim.conf
+- Change the debug level of Rshim byte access widget timeout
+- Add bfb-install script
+
+* Thu Oct 29 2020 Liming Sun <lsun@mellanox.com> - 2.0.5-5
+- Check rshim accessibility when re-enabling it
+- Enable console output during boot stream pushing
+- Add some delay for the pcie_lf probe
+- Auto-start rshim service after installation
+
+* Fri Sep 25 2020 Liming Sun <lsun@mellanox.com> - 2.0.5-4
+- Some robust fixes for USB rshim
+- Fix a typo in pcie mmap
+
+* Mon Aug 17 2020 Liming Sun <lsun@mellanox.com> - 2.0.5-3
+- Fix several coverity warnings
+- Add workaround to boot Viper rev A0 in LiveFish mode
+- Display/configure OPN string for BlueField-2
+
+* Fri Jul 24 2020 Liming Sun <lsun@mellanox.com> - 2.0.5-2
+- Add configuration file support
+- misc: Display device version / revision ID
+- Add service file for FreeBSD
+
+* Tue Jun 16 2020 Liming Sun <lsun@mellanox.com> - 2.0.5-1
+- Improve response time to ctrl+c for boot stream
+- Fix a rpmbuild issue when make_build is not defined
+- Add DROP_MODE configuration in misc file
+- Avoid reading the fifo if still booting
+- Fix configure issue for FreeBSD 12.1-RELEASE
+- Add domain id to the DEV_NAME in the misc file
+- Fix the debian copyright format
+- Enhance rshim_pcie_enable function
+
+* Tue Apr 21 2020 Liming Sun <lsun@mellanox.com> - 2.0.4-1
+- Update .spec file according to review comments
+- Fix the 'KillMode' in rshim.service
+- Support process termination by SIGTERM
+- Fix some compiling warnings and configure issue for FreeBSD
+- Fix a read()/write() issue in rshim_pcie.c caused by optimization
+
+* Tue Apr 14 2020 Liming Sun <lsun@mellanox.com> - 2.0.3-1
+- Enable pci device during probing
+- Map the pci resource0 file instead of /dev/mem
+- Add copyright header in bootstrap.sh
+- Add 'Requires' tag check in the rpm .spec for kernel-modules-extra
+- Fix the 'rshim --version' output
+
+* Thu Apr 09 2020 Liming Sun <lsun@mellanox.com> - 2.0.2-1
+- Remove unnecessary dependency in .spec and use make_build
+- Add package build for debian/ubuntu
+- Fix some format in the man page
+- Add check for syslog headers
+
+* Mon Mar 23 2020 Liming Sun <lsun@mellanox.com> - 2.0.1-1
+- Rename bfrshim to rshim
+- Remove rshim.spec since it's auto-generated from rshim.spec.in
+- Fix warnings reported by coverity
+- Add rhel/rshim.spec.in for fedora
+- Move rshim to sbin and move man page to man8
+
+* Fri Mar 13 2020 Liming Sun <lsun@mellanox.com> - 2.0-1
+- Update the spec file according to fedora packaging-guidelines
+
+* Mon Dec 16 2019 Liming Sun <lsun@mellanox.com>
+- Initial packaging

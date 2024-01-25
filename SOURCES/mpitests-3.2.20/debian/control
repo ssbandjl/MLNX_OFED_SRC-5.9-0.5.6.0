@@ -1,0 +1,15 @@
+Source: mpitests
+Section: libs
+Priority: extra
+Maintainer: Mellanox Ltd. <support@mellanox.com>
+Uploaders: Aleksey Senin <alekseys@mellanox.com>
+Build-Depends: openmpi
+Homepage: http://www.mellanox.com
+
+
+
+
+Package: mpitests
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Set of popular MPI benchmarks and tools IMB 2018 OSU benchmarks ver 4.0.1 mpiP-3.3 IPM-2.0.6

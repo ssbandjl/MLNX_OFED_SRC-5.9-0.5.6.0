@@ -1,0 +1,631 @@
+		DAT Registry Subsystem Design v. 0.90
+                -------------------------------------
+
+=================
+Table of Contents
+=================
+
+* Table of Contents
+* Referenced Documents
+* Introduction
+* Goals
+* Provider API
+* Consumer API
+* Registry Design
+    + Registry Database
+    + Provider API pseudo-code
+    + Consumer API pseudo-code
+    + Platform Specific API pseudo-code
+
+====================
+Referenced Documents
+====================
+
+uDAPL: User Direct Access Programming Library, Version 1.0.  Published
+6/21/2002.  http://www.datcollaborative.org/uDAPL_062102.pdf. Referred
+to in this document as the "DAT Specification". 
+
+============
+Introduction
+============
+
+The DAT architecture supports the use of multiple DAT providers within
+a single consumer application. Consumers implicitly select a provider
+using the Interface Adapter name parameter passed to dat_ia_open(). 
+
+The subsystem that maps Interface Adapter names to provider
+implementations is known as the DAT registry. When a consumer calls
+dat_ia_open(), the appropriate provider is found and notified of the
+consumer's request to access the IA. After this point, all DAT API
+calls acting on DAT objects are automatically directed to the
+appropriate provider entry points.
+
+A persistent, administratively configurable database is used to store
+mappings from IA names to provider information. This provider
+information includes: the file system path to the provider library
+object, version information, and thread safety information. The
+location and format of the registry is platform dependent. This
+database is know as the Static Registry (SR). The process of adding a
+provider entry is termed Static Registration.   
+
+Within each DAT consumer, there is a per-process database that
+maps from ia_name -> provider information. When dat_ia_open() is
+called, the provider library is loaded, the ia_open_func is found, and
+the ia_open_func is called.  
+
+=====
+Goals
+=====
+
+-- Implement the registration mechanism described in the uDAPL
+   Specification. 
+
+-- The DAT registry should be thread safe.
+   
+-- On a consumer's performance critical data transfer path, the DAT
+   registry should not require any significant overhead. 
+
+-- The DAT registry should not limit the number of IAs or providers
+   supported.  
+
+-- The user level registry should be tolerant of arbitrary library 
+   initialization orders and support calls from library initialization 
+   functions.
+
+============
+Provider API
+============
+
+Provider libraries must register themselves with the DAT registry.
+Along with the Interface Adapter name they wish to map, they must
+provide a routines vector containing provider-specific implementations
+of all DAT APIs.  If a provider wishes to service multiple Interface
+Adapter names with the same DAT APIs, it must register each name
+separately with the DAT registry. The Provider API is not exposed to
+consumers.
+
+The user level registry must ensure that the Provider API may be
+called from a library's initialization function. Therefore the
+registry must not rely on a specific library initialization order.
+
+    DAT_RETURN
+    dat_registry_add_provider(
+        IN DAT_PROVIDER                 *provider ) 
+
+Description: Allows the provider to add a mapping.  It will return an
+error if the Interface Adapter name already exists. 
+
+    DAT_RETURN
+    dat_registry_remove_provider(
+        IN  DAT_PROVIDER                *provider )
+
+Description: Allows the Provider to remove a mapping. It will return
+an error if the mapping does not already exist.  
+
+============
+Consumer API
+============
+
+Consumers that wish to use a provider library call the DAT registry to
+map Interface Adapter names to provider libraries. The consumer API is
+exposed to both consumers and providers.
+
+    DAT_RETURN
+    dat_ia_open (
+        IN   const DAT_NAME        device_name,
+        IN    DAT_COUNT            async_event_qlen,
+        INOUT DAT_EVD_HANDLE       *async_event_handle,
+        OUT   DAT_IA_HANDLE        *ia_handle )
+
+Description: Upon success, this function returns an DAT_IA_HANDLE to
+the consumer. This handle, while opaque to the consumer, provides
+direct access to the provider supplied library. To support this
+feature, all DAT_HANDLEs must be pointers to a pointer to a
+DAT_PROVIDER structure.
+
+    DAT_RETURN
+    dat_ia_close (
+        IN DAT_IA_HANDLE            ia_handle )
+
+Description: Closes the Interface Adapter.
+
+    DAT_RETURN
+    dat_registry_list_providers(
+        IN  DAT_COUNT                   max_to_return,
+        OUT DAT_COUNT                   *entries_returned,
+        OUT DAT_PROVIDER_INFO           *(dat_provider_list[]) )
+
+Description: Lists the current mappings.
+
+===============
+Registry Design
+===============
+
+There are three separate portions of the DAT registry system:
+
+* Registry Database
+
+* Provider API
+
+* Consumer API 
+
+We address each of these areas in order. The final section will
+describe any necessary platform specific functions.
+
+Registry Database
+-----------------
+
+Static Registry
+................
+
+The Static Registry is a persistent database containing provider
+information keyed by Interface Adapter name. The Static Registry will
+be examined once when the DAT library is loaded. 
+
+There is no synchronization mechanism protecting access to the Static
+Registry. Multiple readers and writers may concurrently access the
+Static Registry and as a result there is no guarantee that the
+database will be in a consistent format at any given time. DAT
+consumers should be aware of this and not run DAT programs when the
+registry is being modified (for example, when a new provider is being
+installed). However, the DAT library must be robust enough to recognize
+an inconsistent Static Registry and ignore invalid entries.
+
+Information in the Static Registry will be used to initialize the
+registry database. The registry will refuse to load libraries for DAT
+API versions different than its DAT API version. Switching API
+versions will require switching versions of the registry library (the
+library explicitly placed on the link line of DAPL programs) as well
+as the header files included by the program. 
+
+Set DAT_NO_STATIC_REGISTRY at compile time if you wish to compile
+DAT without a static registry.
+
+UNIX Registry Format
+.....................
+
+The UNIX registry will be a plain text file with the following
+properties:  
+	* All characters after # on a line are ignored (comments). 
+	* Lines on which there are no characters other than whitespace
+	  and comments are considered blank lines and are ignored.
+	* Non-blank lines must have seven whitespace separated fields.
+	  These fields may contain whitespace if the field is quoted
+	  with double quotes.  Within fields quoated with double quotes, 
+          the following are valid escape sequences:
+
+          \\ 	backslash
+          \" 	quote
+
+	* Each non-blank line will contain the following fields:
+
+        - The IA Name.
+        - The API version of the library:
+          [k|u]major.minor where "major" and "minor" are both integers
+          in decimal format. Examples: "k1.0", "u1.0", and "u1.1".
+        - Whether the library is thread-safe:
+          [threadsafe|nonthreadsafe]
+        - Whether this is the default section: [default|nondefault]
+        - The path name for the library image to be loaded. 
+        - The version of the driver: major.minor, for example, "5.13".
+
+The format of any remaining fields on the line is dependent on the API
+version of the library specified on that line. For API versions 1.0
+and 1.1 (both kDAPL and uDAPL), there is only a single additional
+field, which is:
+
+       - An optional string with instance data, which will be passed to 
+         the loaded library as its run-time arguments.
+
+This file format is described by the following grammar:
+
+<entry-list>      -> <entry> <entry-list> | <eof>
+<entry>           -> <ia-name> <api-ver> <thread-safety> <default-section>
+                     <lib-path> <driver-ver> <ia-params> [<eor>|<eof>] | 
+                     [<eor>|<eof]
+<ia-name>         -> string
+<api-ver>         -> [k|u]decimal.decimal
+<thread-safety>   -> [threadsafe|nonthreadsafe]
+<default-section> -> [default|nondefault]
+<lib-path>        -> string
+<driver-ver>      -> decimal.decimal
+<ia-params>       -> string
+<eof>             -> end of file
+<eor>             -> newline
+
+The location of this file may be specified by setting the environment
+variable DAT_CONF. If DAT_CONF is not set, the default location will
+be /etc/dat.conf.
+
+Windows Registry Format
+.......................
+
+Standardization of the Windows registry format is not complete at this
+time.
+
+Registry Database Data Structures
+.................................
+
+The Registry Database is implemented as a dictionary data structure that
+stores (key, value) pairs. 
+
+Initially the dictionary will be implemented as a linked list. This
+will allow for an arbitrary number of mappings within the resource
+limits of a given system. Although the search algorithm will have O(n)
+worst case time when n elements are stored in the data structure, we
+do not anticipate this to be an issue. We believe that the number of
+IA names and providers will remain relatively small (on the order of
+10). If performance is found to be an issue, the dictionary can be
+re-implemented using another data structure without changing the
+Registry Database API. 
+
+The dictionary uses IA name strings as keys and stores pointers to a
+DAT_REGISTRY_ENTRY structure, which contains the following
+information: 
+
+    - provider library path string,            library_path
+    - DAT_OS_LIBRARY_HANDLE,                   library_handle
+    - IA parameter string,                     ia_params
+    - DAT_IA_OPEN_FUNC function pointer,       ia_open_func
+    - thread safety indicator,                 is_thread_safe
+    - reference counter,                       ref_count
+
+The entire registry database data structure is protected by a single
+lock. All threads that wish to query/modify the database must posses
+this lock. Serializing access in this manner is not expected to have a
+detrimental effect on performance as contention is expected to be
+minimal. 
+
+An important property of the registry is that entries may be inserted
+into the registry, but no entries are ever removed. The contents of
+the static registry are used to populate the initially empty registry
+database. Since these mapping are by definition persistent, no
+mechanism is provided to remove them from the registry database.
+
+NOTE: There is currently no DAT interface to set a provider's IA 
+specific parameters. A solution for this problem has been proposed for
+uDAPL 1.1.
+
+Registry Database API
+.....................
+
+The static variable Dat_Registry_Db is used to store information about
+the Registry Database and has the following members:
+
+    - lock
+    - dictionary
+
+The Registry Database is accessed via the following internal API:
+
+Algorithm: dat_registry_init
+    Input: void
+   Output: DAT_RETURN
+{
+    initialize Dat_Registry_Db
+
+    dat_os_sr_load()
+}
+
+Algorithm: dat_registry_insert
+    Input: IN  const DAT_STATIC_REGISTRY_ENTRY sr_entry
+   Output: DAT_RETURN
+{
+    dat_os_lock(&Dat_Registry_Db.lock)
+
+    create and initialize DAT_REGISTRY_ENTRY structure 
+
+    dat_dictionary_add(&Dat_Registry_Db.dictionary, &entry)
+
+    dat_os_unlock(&Dat_Registry_Db.lock)
+}
+
+Algorithm: dat_registry_search
+    Input: IN    const DAT_NAME_PTR     ia_name
+           IN    DAT_REGISTRY_ENTRY     **entry
+   Output: DAT_RETURN
+{
+    dat_os_lock(&Dat_Registry_Db.lock)
+
+    entry gets dat_dictionary_search(&Dat_Registry_Db.dictionary, &ia_name)
+
+    dat_os_unlock(&Dat_Registry_Db.lock)
+}
+
+Algorithm: dat_registry_list
+    Input: IN  DAT_COUNT                max_to_return
+           OUT DAT_COUNT                *entries_returned
+           OUT DAT_PROVIDER_INFO        *(dat_provider_list[])
+   Output: DAT_RETURN
+{
+    dat_os_lock(&Dat_Registry_Db.lock)
+
+    size = dat_dictionary_size(Dat_Registry_Db.dictionary)
+
+    for ( i = 0, j = 0; 
+          (i < max_to_return) && (j < size); 
+          i++, j++ ) 
+    {
+        initialize dat_provider_list[i] w/ j-th element in dictionary
+    }
+
+    dat_os_unlock(&Dat_Registry_Db.lock)
+
+    *entries_returned = i;
+}
+
+Provider API pseudo-code
+------------------------
+
++ dat_registry_add_provider()
+
+Algorithm: dat_registry_add_provider
+    Input: IN DAT_PROVIDER              *provider
+   Output: DAT_RETURN
+{
+    dat_init()
+
+    dat_registry_search(provider->device_name, &entry)
+
+    if IA name is not found then dat_registry_insert(new entry)
+
+    if entry.ia_open_func is not NULL return an error
+
+    entry.ia_open_func = provider->ia_open_func
+}
+
++ dat_registry_remove_provider()
+
+Algorithm: dat_registry_remove_provider
+    Input: IN  DAT_PROVIDER                *provider 
+   Output: DAT_RETURN
+{
+    dat_init()
+
+    dat_registry_search(provider->device_name, &entry)
+
+    if IA name is not found return an error
+
+    entry.ia_open_func = NULL
+}        
+
+Consumer API pseudo-code
+------------------------
+
+* dat_ia_open() 
+
+This function looks up the specified IA name in the ia_dictionary, 
+loads the provider library, retrieves a function pointer to the
+provider's IA open function from the provider_dictionary, and calls
+the providers IA open function. 
+
+Algorithm: dat_ia_open
+    Input: IN    const DAT_NAME_PTR	name
+	   IN	 DAT_COUNT		async_event_qlen
+	   INOUT DAT_EVD_HANDLE         *async_event_handle
+	   OUT   DAT_IA_HANDLE          *ia_handle
+   Output: DAT_RETURN 
+
+{
+    dat_registry_search(name, &entry)
+
+    if the name is not found return an error
+    
+    dat_os_library_load(entry.library_path, &entry.library_handle)
+
+    if the library fails to load return an error
+    
+    if the entry's ia_open_func is invalid 
+    {
+        dl_os_library_unload(entry.library_handle)
+        return an error
+    }
+
+    (*ia_open_func) (name, 
+                     async_event_qlen,
+                     async_event_handle,
+                     ia_handle);
+}
+
+* dat_ia_close()
+
+Algorithm: dat_ia_close
+    Input: IN DAT_IA_HANDLE             ia_handle
+           IN DAT_CLOSE_FLAGS           ia_flags
+   Output: DAT_RETURN 
+{
+    provider = DAT_HANDLE_TO_PROVIDER(ia_handle)
+
+    (*provider->ia_close_func) (ia_handle, ia_flags)
+
+    dat_registry_search(provider->device_name, &entry)
+
+    dat_os_library_unload(entry.library_handle)
+}
+
++ dat_registry_list_providers()
+
+Algorithm: dat_registry_list_providers
+    Input: IN  DAT_COUNT                   max_to_return
+           OUT DAT_COUNT                   *entries_returned
+           OUT DAT_PROVIDER_INFO           *(dat_provider_list[])
+   Output: DAT_RETURN
+{
+    validate parameters
+
+    dat_registry_list(max_to_return, entries_returned, dat_provider_list)
+}
+
+Platform Specific API pseudo-code
+--------------------------------
+
+Below are descriptions of platform specific functions required by the
+DAT Registry. These descriptions are for Linux.
+
+Each entry in the static registry is represented by an OS specific
+structure, DAT_OS_STATIC_REGISTRY_ENTRY. On Linux, this structure will
+have the following members:
+
+ - IA name string
+ - API version
+ - thread safety 
+ - default section
+ - library path string
+ - driver version
+ - IA parameter string
+
+The tokenizer will return a DAT_OS_SR_TOKEN structure
+containing:
+
+ - DAT_OS_SR_TOKEN_TYPE value
+ - string with the fields value
+
+The tokenizer will ignore all white space and comments. The tokenizer
+will also translate any escape sequences found in a string.
+
+Algorithm: dat_os_sr_load
+    Input: n/a
+   Output: DAT_RETURN
+{
+    if DAT_CONF environment variable is set
+     static_registry_file = contents of DAT_CONF
+    else
+     static_registry_file = /etc/dat.conf
+
+    sr_fd = dat_os_open(static_registry_file)
+
+    forever
+    {
+        initialize DAT_OS_SR_ENTRY entry
+
+        do        
+        {
+            // discard blank lines
+            dat_os_token_next(sr_fd, &token)
+        } while token is newline
+
+        if token type is EOF then break // all done
+        // else the token must be a string
+        
+        entry.ia_name = token.value
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not string then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+        else if ( dat_os_convert_api(token.value, &entry.api) fails )
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not string then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+        else if ( dat_os_convert_thread_safety(token.value, &entry.thread_safety) fails )
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not string then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+        else if ( dat_os_convert_default(token.value, &entry.default) fails )
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not string then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+
+        entry.lib_path = token.value
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not string then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+        else if ( dat_os_convert_driver_version(token.value, &entry.driver_version) fails )
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not string then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+
+        entry.ia_params = token.value
+
+        dat_os_token_next(sr_fd, &token)
+
+        if token type is EOF then break // all done
+        else if token type is not newline then 
+        {
+            // an error has occurred
+            dat_os_token_sync(sr_fd)
+            continue
+        }
+        
+        if ( dat_os_sr_is_valid(entry) )
+        {
+            dat_registry_insert(entry)
+        }
+    }
+
+    dat_os_close(sr_fd)
+}
+
+Algorithm: dat_os_library_load
+    Input: IN  const DAT_NAME_PTR       *library_path
+           OUT DAT_LIBRARY_HANDLE       *library_handle
+   Output: DAT_RETURN
+{
+    *library_handle = dlopen(library_path);
+}
+
+Algorithm: dat_os_library_unload
+    Input: IN  const DAT_LIBRARY_HANDLE library_handle
+   Output: DAT_RETURN
+{
+    dlclose(library_handle)
+}

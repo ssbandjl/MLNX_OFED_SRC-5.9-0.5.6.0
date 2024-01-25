@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+
+
+#export DH_VERBOSE=1
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+override_dh_auto_configure:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	make MPIHOME=$(MPI_HOME) PATH=$(PATH):$(MPI_HOME)/bin install
+
+override_dh_shlibdeps:
+	env LD_LIBRARY_PATH=$(MPI_HOME)/lib64:$$LD_LIBRARY_PATH dh_shlibdeps PATH=$(PATH):$(MPI_HOME)/bin  --dpkg-shlibdeps-params=--ignore-missing-info
+
+override_dh_auto_build:
+	make  MPIHOME=$(MPI_HOME) PATH=$(PATH):$(MPI_HOME)/bin
+
+

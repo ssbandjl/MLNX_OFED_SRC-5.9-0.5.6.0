@@ -1,0 +1,4 @@
+DIRS=\
+	dat	\
+	dapl	\
+	test

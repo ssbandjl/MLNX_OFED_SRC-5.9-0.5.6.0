@@ -1,0 +1,160 @@
+#!/bin/bash
+usage()
+{
+	cat <<EOF
+Usage: $0 [options]
+
+Options:
+    -s       Show package name and version number.
+    -n       Show numerical version number only.
+    -l       List installed packages details (Default option).
+EOF
+}
+if [ "X$1" == "X-s" ]; then echo OFED-internal-5.9-0.5.6:; exit 0; fi
+if [ "X$1" == "X-n" ]; then echo 5.9-0.5.6; exit 0; fi
+if [ "X$1" != "X-l" ] && [ "X$1" != "X" ]; then usage; exit 1; fi
+
+cat << EOF
+OFED-internal-5.9-0.5.6:
+
+clusterkit:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/clusterkit-1.8.429-1.59055.src.rpm
+
+dapl:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/dapl-2.1.10.1.mlnx-OFED.4.9.0.1.5.59055.src.rpm
+
+dpcp:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/dpcp-1.1.38-1.59055.src.rpm
+
+dump_pr:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/dump_pr-1.0-1.MLNX20230110.gac314ef.59055.src.rpm
+
+hcoll:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/hcoll-4.8.3221-1.59055.src.rpm
+
+ibarr:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/ibarr-0.1.3-1.59055.src.rpm
+
+ibdump:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/ibdump-6.0.0-1.59055.src.rpm
+
+ibsim:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/ibsim-0.12-1.59055.src.rpm
+
+ibutils2:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/ibutils2-2.1.1-0.159.MLNX20230118.g1214769c.59055.src.rpm
+
+iser:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/iser-5.9-OFED.5.9.0.5.4.1.src.rpm
+
+isert:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/isert-5.9-OFED.5.9.0.5.4.1.src.rpm
+
+kernel-mft:
+mlnx_ofed_mft/kernel-mft-4.23.0-104.src.rpm
+
+knem:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/knem-1.1.4.90mlnx1-OFED.4.9.6.0.0.1.src.rpm
+
+libvma:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/libvma-9.8.1-1.src.rpm
+
+libxlio:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/libxlio-2.1.4-1.src.rpm
+
+mlnx-dpdk:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-dpdk-22.11.0-0.0.8.59055.src.rpm
+
+mlnx-en:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-en-5.9-0.5.5.0.g8e3d458.src.rpm
+
+mlnx-ethtool:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-ethtool-6.0-1.59055.src.rpm
+
+mlnx-iproute2:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-iproute2-6.0.0-1.59055.src.rpm
+
+mlnx-nfsrdma:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-nfsrdma-5.9-OFED.5.9.0.5.4.1.src.rpm
+
+mlnx-nvme:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-nvme-5.9-OFED.5.9.0.5.4.1.src.rpm
+
+mlnx-ofa_kernel:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-ofa_kernel-5.9-OFED.5.9.0.5.5.1.src.rpm
+
+mlnx-tools:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlnx-tools-5.2.0-0.59055.src.rpm
+
+mlx-steering-dump:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mlx-steering-dump-1.0.0-0.59055.src.rpm
+
+mpi-selector:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mpi-selector-1.0.3-1.59055.src.rpm
+
+mpitests:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mpitests-3.2.20-de56b6b.59055.src.rpm
+
+mstflint:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/mstflint-4.16.1-2.59055.src.rpm
+
+multiperf:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/multiperf-3.0-3.0.59055.src.rpm
+
+ofed-docs:
+docs.git mlnx_ofed-4.0
+commit 3d1b0afb7bc190ae5f362223043f76b2b45971cc
+
+openmpi:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/openmpi-4.1.5rc2-1.59055.src.rpm
+
+opensm:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/opensm-5.14.0.MLNX20230123.8bab53ab-0.1.59055.src.rpm
+
+openvswitch:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/openvswitch-2.17.6-1.59055.src.rpm
+
+perftest:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/perftest-4.5-0.20.gac7cca5.59055.src.rpm
+
+rdma-core:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/rdma-core-59mlnx44-1.59055.src.rpm
+
+rshim:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/rshim-2.0.6-18.g955dbef.src.rpm
+
+sharp:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/sharp-3.2.0.MLNX20230122.a97f1d1c-1.59055.src.rpm
+
+sockperf:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/sockperf-3.10-0.git5ebd327da983.59055.src.rpm
+
+srp:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/srp-5.9-OFED.5.9.0.5.4.1.src.rpm
+
+ucx:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/ucx-1.15.0-1.59055.src.rpm
+
+xpmem:
+/sw/release/mlnx_ofed/IBHPC/OFED-internal-5.9-0.5.5/SRPMS/xpmem-2.6.4-1.59055.src.rpm
+
+EOF
+
+echo
+echo Installed Packages:
+echo -------------------
+
+pkglist1=
+pkglist2=
+
+if [ -x /usr/bin/dpkg ]; then
+    pkglist1=$(dpkg --list | grep -E "clusterkit|libdapl-dev|libdapl2|dapl2-utils|dpcp|dump-pr|hcoll|ibarr|ibdump|ibsim|ibsim-doc|ibutils2|iser-dkms|isert-dkms|kernel-mft-dkms|knem|knem-dkms|libvma|libvma-dev|libvma-dbg|libvma-utils|libxlio|libxlio-dev|libxlio-dbg|libxlio-utils|mlnx-dpdk|mlnx-dpdk-doc|mlnx-dpdk-dev|mlnx-en-utils|mlnx-en-dkms|mlnx-ethtool|mlnx-iproute2|mlnx-nfsrdma-dkms|mlnx-nvme-dkms|mlnx-ofed-kernel-utils|mlnx-ofed-kernel-dkms|mlnx-tools|mlx-steering-dump|mpitests|mstflint|openmpi|opensm|opensm-doc|libopensm|libopensm-devel|openvswitch-datapath-source|openvswitch-datapath-dkms|openvswitch-common|libopenvswitch|openvswitch-switch|openvswitch-pki|openvswitch-testcontroller|openvswitch-dbg|python3-openvswitch|openvswitch-test|openvswitch-vtep|libopenvswitch-dev|openvswitch-ipsec|perftest|rdma-core|ibacm|ibverbs-providers|ibverbs-utils|libibverbs-dev|libibverbs1|libibverbs1-dbg|libibumad-dev|libibumad3|libibumad3-dbg|librdmacm-dev|librdmacm1|librdmacm1-dbg|rdmacm-utils|srptools|python3-pyverbs|infiniband-diags|libibmad5|libibmad5-dbg|libibmad-dev|libibnetdisc5|libibnetdisc5-dbg|libibnetdisc-dev|rshim|sharp|sockperf|srp-dkms|ucx-dev|ucx|ucx-cuda|ucx-gdrcopy")
+fi
+
+if (which rpm >/dev/null 2>&1); then
+    pkglist2=$(rpm -qa --queryformat "[%{NAME}]
+" | grep -E "kernel-ib|clusterkit|dapl|dpcp|dump_pr|hcoll|ibarr|ibdump|ibsim|ibutils2|^iser|kmod-iser|iser.*kmp|^isert|kmod-isert|isert.*kmp|kernel-mft|knem|libvma|libxlio|mlnx-dpdk|mlnx-en|mlnx-ethtool|mlnx-iproute2|mlnx-nfsrdma|mlnx-nvme|mlnx-ofa_kernel|mlnx-tools|mlx-steering-dump|mpi-selector|mpitests|mstflint|multiperf|ofed-docs|openmpi|opensm|openvswitch|perftest|rdma-core|ibacm|libibcm|libibumad|libibverbs|librdmacm|srp_daemon|infiniband-diags|python3-pyverbs|rshim|sharp|sockperf|^srp$|kmod-srp|srp.*kmp|ucx|xpmem|neohost-backend|neohost-sdk")
+fi
+
+echo -e "$pkglist1"
+echo -e "$pkglist2"

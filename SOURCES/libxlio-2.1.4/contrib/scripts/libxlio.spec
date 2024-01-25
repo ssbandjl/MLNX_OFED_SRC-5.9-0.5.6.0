@@ -1,0 +1,193 @@
+%{!?configure_options: %global configure_options %{nil}}
+%{!?use_rel: %global use_rel 1}
+
+%{!?make_build: %global make_build %{__make} %{?_smp_mflags} %{?mflags} V=1}
+%{!?run_ldconfig: %global run_ldconfig %{?ldconfig}}
+%{!?_pkgdocdir: %global _pkgdocdir %{_docdir}/%{name}-%{version}}
+%global use_systemd %(if systemctl >/dev/null 2>&1; then echo -n '1'; else echo -n '0'; fi)
+
+Name: libxlio
+Version: 2.1.4
+Release: %{use_rel}%{?dist}
+Summary: A library for boosting TCP and UDP traffic (over RDMA hardware)
+%if 0%{?rhl}%{?fedora} == 0
+Group: System Environment/Libraries
+%endif
+
+License: GPLv2 or BSD
+Url: https://github.com/Mellanox/%{name}
+Source0: %{url}/archive/%{version}/%{name}-%{version}.tar.gz
+
+# library currently supports only the following architectures
+ExclusiveArch: x86_64 ppc64le ppc64 aarch64
+
+BuildRequires: pkgconfig
+BuildRequires: automake
+BuildRequires: autoconf
+BuildRequires: libtool
+BuildRequires: gcc-c++
+BuildRequires: rdma-core-devel
+%if "%{use_systemd}" == "1"
+%if 0%{?rhel} >= 9 || 0%{?fedora} >= 30 || 0%{?suse_version} >= 1210
+BuildRequires: systemd-rpm-macros
+%{?systemd_requires}
+%else
+BuildRequires: systemd
+%endif
+%endif
+%if 0%{?rhel} >= 7 || 0%{?fedora} >= 24 || 0%{?suse_version} >= 1500
+BuildRequires: pkgconfig(libnl-3.0)
+BuildRequires: pkgconfig(libnl-route-3.0)
+%endif
+BuildRequires: make
+
+%description
+libxlio is a LD_PRELOAD-able library that boosts performance of TCP and
+UDP traffic. It allows application written over standard socket API to
+handle fast path data traffic from user space over Ethernet and/or
+Infiniband with full network stack bypass and get better throughput,
+latency and packets/sec rate.
+
+No application binary change is required for that.
+library is supported by RDMA capable devices that support "verbs"
+IBV_QPT_RAW_PACKET QP for Ethernet and/or IBV_QPT_UD QP for IPoIB.
+
+%package devel
+Summary: Header files required to develop with libxlio
+%if 0%{?rhl}%{?fedora} == 0
+Group: System Environment/Libraries
+%endif
+Requires: %{name}%{?_isa} = %{version}-%{release}
+
+%description devel
+This package includes headers for building programs with libxlio's
+interfaces.
+
+%package utils
+Summary: Utilities used with libxlio
+%if 0%{?rhl}%{?fedora} == 0
+Group: System Environment/Libraries
+%endif
+Requires: %{name}%{?_isa} = %{version}-%{release}
+
+%description utils
+This package contains the tool for collecting and analyzing libxlio statistic.
+
+%prep
+%setup -q
+
+%build
+if [ ! -e configure ] && [ -e autogen.sh ]; then
+    PRJ_RELEASE=%{use_rel} ./autogen.sh
+fi
+
+%if %{use_rel} > 0
+%configure --enable-opt-log=none --enable-debug \
+           %{?configure_options}
+%{make_build}
+cp -f src/core/.libs/%{name}.so %{name}-debug.so
+%{make_build} clean
+%endif
+
+%configure --docdir=%{_pkgdocdir} \
+           %{?configure_options}
+%{make_build}
+
+%install
+%{make_build} DESTDIR=${RPM_BUILD_ROOT} install
+
+find $RPM_BUILD_ROOT%{_libdir} -name '*.la' -delete
+%if "%{use_systemd}" == "1"
+install -D -m 644 contrib/scripts/xlio.service $RPM_BUILD_ROOT/%{_prefix}/lib/systemd/system/xlio.service
+%endif
+
+%if %{use_rel} > 0
+install -m 755 ./%{name}-debug.so $RPM_BUILD_ROOT/%{_libdir}/%{name}-debug.so
+%endif
+
+%post
+%if 0%{?fedora} || 0%{?rhel} > 7
+# https://fedoraproject.org/wiki/Changes/Removing_ldconfig_scriptlets
+%else
+%{run_ldconfig}
+%endif
+if [ $1 = 1 ]; then
+    if systemctl >/dev/null 2>&1; then
+        %if 0%{?systemd_post:1} || 0%{?service_add_post:1}
+            %if 0%{?service_add_post:1}
+            %service_add_post xlio.service
+            %else
+            %systemd_post xlio.service
+            %endif
+        %else
+            systemctl --no-reload enable xlio.service >/dev/null 2>&1 || true
+        %endif
+    fi
+fi
+
+%preun
+if [ $1 = 0 ]; then
+    if systemctl >/dev/null 2>&1; then
+        %if 0%{?systemd_preun:1} || 0%{?service_del_preun:1}
+            %if 0%{?service_del_preun:1}
+            %service_del_preun xlio.service
+            %else
+            %systemd_preun xlio.service
+            %endif
+        %else
+            systemctl --no-reload disable xlio.service >/dev/null 2>&1 || true
+            systemctl stop xlio.service || true
+        %endif
+    fi
+fi
+
+%postun
+%if 0%{?fedora} || 0%{?rhel} > 7
+# https://fedoraproject.org/wiki/Changes/Removing_ldconfig_scriptlets
+%else
+%{run_ldconfig}
+%endif
+if systemctl >/dev/null 2>&1; then
+        %if 0%{?systemd_postun_with_restart:1} || 0%{?service_del_postun:1}
+            %if 0%{?service_del_postun:1}
+            %service_del_postun xlio.service
+            %else
+            %systemd_postun_with_restart xlio.service
+            %endif
+        %else
+            systemctl --system daemon-reload >/dev/null 2>&1 || true
+        %endif
+fi
+
+%files
+%{_libdir}/%{name}.so*
+%dir %{_pkgdocdir}
+%doc %{_pkgdocdir}/README
+%doc %{_pkgdocdir}/CHANGES
+%config(noreplace) %{_sysconfdir}/libxlio.conf
+%{_sbindir}/xliod
+%if "%{use_systemd}" == "1"
+%{_prefix}/lib/systemd/system/xlio.service
+%endif
+%{_mandir}/man7/xlio.*
+%{_mandir}/man8/xliod.*
+%if 0%{?rhel} >= 7 || 0%{?fedora} >= 24 || 0%{?suse_version} >= 1500
+%license LICENSE
+%endif
+
+%files devel
+%dir %{_includedir}/mellanox
+%{_includedir}/mellanox/xlio_extra.h
+%if %{use_rel} > 0
+%{_libdir}/%{name}-debug.so
+%endif
+
+%files utils
+%{_bindir}/xlio_stats
+%{_mandir}/man8/xlio_stats.*
+
+%changelog
+* Tue Jan 19 2023 NVIDIA CORPORATION <networking-support@nvidia.com> 2.1.4-1
+- Bump version to 2.1.4
+- Please refer to CHANGES for full changelog.
+

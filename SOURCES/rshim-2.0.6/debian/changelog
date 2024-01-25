@@ -1,0 +1,246 @@
+rshim (2.0.6-18.g955dbef) UNRELEASED; urgency=low
+
+  * pcie: fix initialization issue when setting DROP_MODE in rshim.conf
+
+ -- Liming Sun <limings@nvidia.com>  Tue, 25 Oct 2022 11:56:20 -0400
+
+rshim (2.0.6-17) UNRELEASED; urgency=low
+
+  * pcie: Avoid using cached pci_dev
+  * rshim_fuse: display misc file even when rshim is not accessible
+
+ -- Liming Sun <limings@nvidia.com>  Thu, 20 Oct 2022 22:08:20 -0400
+
+rshim (2.0.6-16) UNRELEASED; urgency=low
+
+  * pcie: Support mixed vfio and direct mapping mode
+
+ -- Liming Sun <limings@nvidia.com>  Thu, 06 Oct 2022 08:23:10 -0400
+
+rshim (2.0.6-15) UNRELEASED; urgency=low
+
+  * Add dependency of libfuse2 for .deb
+  * rshim-pcie: add a new bad-access code
+  * Fix a potential NULL pointer access during USB disonnect
+  * Adjust default boot timeout to 150s
+
+ -- Liming Sun <limings@nvidia.com>  Thu, 29 Sep 2022 10:26:15 -0400
+
+rshim (2.0.6-14) UNRELEASED; urgency=low
+
+  * Avoid potential race when stopping the rshim process
+  * Add configuration option to enable/disable PCIe VFIO/UIO
+  * Fix warnings for compiling on 32-bit BMC
+  * Mustang rshim usb supports for 4B and 8B transactions
+
+ -- Liming Sun <limings@nvidia.com>  Tue, 16 Aug 2022 15:40:15 -0400
+
+rshim (2.0.6-13) UNRELEASED; urgency=low
+
+  * BF3: Support 32-bit CR-space access via USB
+  * Avoid kernel-modules-extra dependency on ctyunos
+
+ -- Liming Sun <limings@nvidia.com>  Sun, 17 Jul 2022 17:01:15 -0400
+
+rshim (2.0.6-12) UNRELEASED; urgency=low
+
+  * Optimize the rshim_work_fd
+  * Detect new USB/rshim hot plugin
+
+ -- Liming Sun <limings@nvidia.com>  Thu, 16 Jun 2022 18:27:10 -0400
+
+rshim (2.0.6-11) UNRELEASED; urgency=low
+
+  * Avoid kernel crash when unbind rshim from uio
+
+ -- Liming Sun <limings@nvidia.com>  Mon, 16 May 2022 20:48:15 -0400
+
+rshim (2.0.6-10) UNRELEASED; urgency=low
+
+  * Fix several compiling issues for FreeBSD
+
+ -- Liming Sun <limings@nvidia.com>  Mon, 02 May 2022 09:52:10 -0400
+
+rshim (2.0.6-9) UNRELEASED; urgency=low
+
+  * Use per-device memory-map mode
+
+ -- Liming Sun <limings@nvidia.com>  Thu, 28 Apr 2022 15:12:10 -0400
+
+rshim (2.0.6-8) UNRELEASED; urgency=low
+
+  * Add interrupt polling for direct mmap() mode
+  * Fix several coverity warnings
+
+ -- Liming Sun <limings@nvidia.com>  Mon, 18 Apr 2022 23:31:20 -0400
+
+rshim (2.0.6-7) UNRELEASED; urgency=low
+
+  * Keep intr_fd during rshim_pcie disable/enable
+  * Mustang: Add support for rshim over pcie and pcie_lf
+
+ -- Liming Sun <limings@nvidia.com>  Thu, 07 Apr 2022 12:27:30 -0400
+
+rshim (2.0.6-6) UNRELEASED; urgency=low
+
+  * Clear scratchpad1 to 0 before PCI resources are unmapped
+  * Fallback to UIO if VFIO failed
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 30 Mar 2022 11:21:20 -0400
+
+rshim (2.0.6-5) UNRELEASED; urgency=low
+
+  * PCIe: Add UIO and IRQ support
+  * PCIe: Remove 32-bit support
+
+ -- Liming Sun <limings@nvidia.com>  Fri, 18 Mar 2022 11:41:20 -0400
+
+rshim (2.0.6-4) UNRELEASED; urgency=low
+
+  * VFIO support
+  * Fix potential race in rshim_work_signal
+
+ -- Liming Sun <limings@nvidia.com>  Mon, 28 Feb 2022 09:31:10 -0400
+
+rshim (2.0.6-3) UNRELEASED; urgency=low
+
+  * Adjust the defaul value of usb_reset_delay to 5
+  * Add a delay after USB probe
+  * Make the reset delay configurable
+
+ -- Liming Sun <limings@nvidia.com>  Mon, 29 Nov 2021 09:32:10 -0400
+
+rshim (2.0.6-2) UNRELEASED; urgency=low
+
+  * bfb-install: Handle new indications for installation completion
+  * Clean up some un-needed register definition
+  * Fix MTU of the tmfifo_net0 interface on FreeBSD
+  * Several fixes to prevent hypervisor crash
+  * Refine some BF-2 Rev0 workaround condition
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 03 Nov 2021 19:02:10 -0400
+
+rshim (2.0.6-1) UNRELEASED; urgency=low
+
+  * Disable the background timer if no rshim devices
+  * Setting default path for rshim config file
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 12 May 2021 17:50:20 -0400
+
+rshim (2.0.5-10) UNRELEASED; urgency=low
+
+  * PCIe hotplug support
+  * Reduce CPU utilization when there is no rshim device
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 10 Mar 2021 14:11:21 -0400
+
+rshim (2.0.5-9) UNRELEASED; urgency=low
+
+  * Fix potential tmfifo data loss
+  * Add workaround checking for Bluefield-2 REV-0
+  * Fix network traffic stop issue when Tx buffer full
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 27 Jan 2021 10:17:20 -0400
+
+rshim (2.0.5-8) UNRELEASED; urgency=low
+
+  * Don't allow any register access when DROP_MODE is set
+  * Avoid potential race in rshim_fifo_read
+
+ -- Liming Sun <limings@nvidia.com>  Fri, 11 Dec 2020 15:10:23 -0400
+
+rshim (2.0.5-7) UNRELEASED; urgency=low
+
+  * Fix potential dead-lock when calling rshim_access_check
+  * Ignore rshim access checking when global drop mode is enabled
+  * Fix some secure boot related issue
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 09 Dec 2020 08:58:43 -0400
+
+rshim (2.0.5-6) UNRELEASED; urgency=low
+
+  * Add some default configuration in rshim.conf
+  * Change the debug level of Rshim byte access widget timeout
+  * Add bfb-install script
+
+ -- Liming Sun <limings@nvidia.com>  Wed, 02 Dec 2020 08:20:23 -0400
+
+rshim (2.0.5-5) UNRELEASED; urgency=low
+
+  * Check rshim accessibility when re-enabling it
+  * Enable console output during boot stream pushing
+  * Add some delay for the pcie_lf probe
+  * Auto-start rshim service after installation
+
+ -- Liming Sun <lsun@mellanox.com>  Thu, 29 Oct 2020 08:06:13 -0400
+
+rshim (2.0.5-4) UNRELEASED; urgency=low
+
+  * Some robust fixes for USB rshim
+  * Fix a typo in pcie mmap
+
+ -- Liming Sun <lsun@mellanox.com>  Fri, 25 Sep 2020 10:31:10 -0400
+
+rshim (2.0.5-3) UNRELEASED; urgency=low
+
+  * Fix several coverity warnings
+  * Add workaround to boot Viper rev A0 in LiveFish mode
+  * Display/configure OPN string for BlueField-2
+
+ -- Liming Sun <lsun@mellanox.com>  Mon, 17 Aug 2020 20:37:23 -0400
+
+rshim (2.0.5-2) UNRELEASED; urgency=low
+
+  * Add configuration file support
+  * misc: Display device version / revision ID
+  * Add service file for FreeBSD
+
+ -- Liming Sun <lsun@mellanox.com>  Fri, 24 Jul 2020 08:06:20 -0400
+
+rshim (2.0.5-1) UNRELEASED; urgency=low
+
+  * Improve response time to ctrl+c for boot stream
+  * Fix a rpmbuild issue when make_build is not defined
+  * Add DROP_MODE configuration in misc file
+  * Avoid reading the fifo if still booting
+  * Fix configure issue for FreeBSD 12.1-RELEASE
+  * Add domain id to the DEV_NAME in the misc file
+  * Fix the debian copyright format
+  * Enhance rshim_pcie_enable function
+
+ -- Liming Sun <lsun@mellanox.com>  Tue, 16 Jun 2020 13:58:10 -0400
+
+rshim (2.0.4-1) UNRELEASED; urgency=low
+
+  * Update .spec file according to review comments
+  * Fix the 'KillMode' in rshim.service
+  * Support process termination by SIGTERM
+  * Fix some compiling warnings and configure issue for FreeBSD
+  * Fix a read()/write() issue in rshim_pcie.c caused by optimization
+
+ -- Liming Sun <lsun@mellanox.com>  Tue, 21 Apr 2020 11:21:20 -0400
+
+rshim (2.0.3-1) UNRELEASED; urgency=low
+
+  * Enable pci device during probing
+  * Map the pci resource0 file instead of /dev/mem
+  * Add copyright header in bootstrap.sh
+  * Add 'Requires' tag check in the rpm .spec for kernel-modules-extra
+  * Fix the 'rshim --version' output
+
+ -- Liming Sun <lsun@mellanox.com>  Tue, 14 Apr 2020 16:40:25 -0400
+
+rshim (2.0.2-1) UNRELEASED; urgency=low
+
+  * Remove unnecessary dependency in .spec and use make_build
+  * Add package build for debian/ubuntu
+  * Fix some format in the man page
+  * Add check for syslog headers
+
+ -- Liming Sun <lsun@mellanox.com>  Thu, 09 Apr 2020 12:17:15 -0400
+
+rshim (2.0.1-1) UNRELEASED; urgency=low
+
+  * Initial release.
+
+ -- Liming Sun <lsun@mellanox.com>  Tue, 07 Apr 2020 10:46:15 -0400

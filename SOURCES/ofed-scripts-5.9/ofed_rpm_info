@@ -1,0 +1,77 @@
+#!/bin/bash
+
+if [ -z $1 ]; then
+	grep -A999 "^## DATA ##" $0 | grep -v DATA | sed -e "s/#//"
+else
+	grep -A999 "^## DATA ##" $0 | grep -v DATA | sed -e "s/#//" | grep -w "^$1"
+fi
+
+## DATA ##
+#clusterkit 1.8.429 1.59055
+#clusterkit 1.8.429 1
+#dapl 2.1.10.1.mlnx OFED.4.9.0.1.4
+#dapl 2.1.10.1.mlnx OFED.4.9.0.1.5.59055
+#dpcp 1.1.38 1.59055
+#dpcp 1.1.38 1
+#dump_pr 1.0 1.MLNX20230110.gac314ef.59055
+#dump_pr 1.0 1.MLNX20230110.gac314ef
+#hcoll 4.8.3221 1.59055
+#hcoll 4.8.3221 1
+#ibarr 0.1.3 1.59055
+#ibarr 0.1.3 1
+#ibdump 6.0.0 1.59055
+#ibdump 6.0.0 1
+#ibsim 0.12 1.59055
+#ibsim 0.12 1
+#ibutils2 2.1.1 0.159.MLNX20230118.g1214769c.59055
+#ibutils2 2.1.1 0.159.MLNX20230118.g1214769c
+#iser 5.9 OFED.5.9.0.5.4.1
+#isert 5.9 OFED.5.9.0.5.4.1
+#kernel-mft 4.23.0 104
+#knem 1.1.4.90mlnx1 OFED.4.9.6.0.0.1
+#libvma 9.8.1 1
+#libxlio 2.1.4 1
+#mlnx-dpdk 22.11.0 0.0.8.59055
+#mlnx-dpdk 22.11.0 0.0.8
+#mlnx-en 5.9 0.5.5.0.g8e3d458
+#mlnx-ethtool 6.0 1.59055
+#mlnx-ethtool 6.0 1
+#mlnx-iproute2 6.0.0 1.59055
+#mlnx-iproute2 6.0.0 1
+#mlnx-nfsrdma 5.9 OFED.5.9.0.5.4.1
+#mlnx-nvme 5.9 OFED.5.9.0.5.4.1
+#mlnx-ofa_kernel 5.9 OFED.5.9.0.5.5.1
+#mlnx-tools 5.2.0 0.59055
+#mlnx-tools 5.2.0 0
+#mlx-steering-dump 1.0.0 0.59055
+#mlx-steering-dump 1.0.0 0
+#mpi-selector 1.0.3 1.59055
+#mpi-selector 1.0.3 1
+#mpitests 3.2.20 de56b6b.59055
+#mpitests 3.2.20 de56b6b
+#mstflint 4.16.1 2.59055
+#mstflint 4.16.1 2
+#multiperf 3.0 3.0.59055
+#multiperf 3.0 3.0
+#ofed-docs 5.9 OFED.5.9.0.5.6
+#openmpi 4.1.5rc2 1.59055
+#openmpi 4.1.5rc2 1
+#opensm 5.14.0.MLNX20230123.8bab53ab 0.1.59055
+#opensm 5.14.0.MLNX20230123.8bab53ab 0.1
+#openvswitch 2.17.6 1.59055
+#openvswitch 2.17.6 1
+#perftest 4.5 0.20.gac7cca5.59055
+#perftest 4.5 0.20.gac7cca5
+#rdma-core 59mlnx44 1.59055
+#rdma-core 59mlnx44 1
+#rshim 2.0.6 18.g955dbef
+#sharp 3.2.0.MLNX20230122.a97f1d1c 1.59055
+#sharp 3.2.0.MLNX20230122.a97f1d1c 1
+#sockperf 3.10 0.git5ebd327da983.59055
+#sockperf 3.10 0.git5ebd327da983
+#srp 5.9 OFED.5.9.0.5.4.1
+#ucx 1.15.0 1.59055
+#ucx 1.15.0 1
+#xpmem 2.6.4 1.59055
+#xpmem 2.6.4 1
+#ofed-scripts 5.9 OFED.5.9.0.5.6

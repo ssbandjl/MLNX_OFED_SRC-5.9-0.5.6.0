@@ -1,0 +1,342 @@
+
+knem 1.1.4 (June 24th, 2020)
+============================
+
+* Fix driver build with Linux kernel up to 5.7.
+  Thanks to Alaa Hleihel and Helmut Jarausch for patches,
+  and to Dave Love for reports.
+* Add -m and -s options to knem_pingpong so that both processes
+  may be created separately, for instance in different namespaces.
+* Add a knem.pc pkg-config file (only useful for cflags),
+  thanks to Alex Margolin for the patch.
+
+knem 1.1.3 (November 6th, 2017)
+===============================
+
+* Fix driver build with Linux kernel up to 4.14.
+
+knem 1.1.2 (February 18th, 2015)
+================================
+
+* Distribute the kernel driver under the GPLv2 license instead of
+  dual BSD/GPL.
+* Fix dmaengine build with Linux kernel 3.18 and RHEL 7.1.
+  Thanks to Alaa Hleihel for reporting issues and testing patches.
+* Fix driver build with early Linux 3.20 kernel snapshots.
+
+knem 1.1.1 (February 24th, 2014)
+================================
+
+* Fix dmaengine build with Linux kernel 3.13.
+* Fix driver build when strict uid checking is enabled.
+* Check DMA channel alignment contraints and work around overzealous
+  restrictions on buggy IOAT RAID platforms.
+
+knem 1.1.0 (July 25th 2013)
+===========================
+
+* Fix a possible crash when trying to access an non-existing region
+  (bug introduced by overzealous check in 1.0.0 release).
+* Add KNEM_FLAG_NOTIFY_FD to queue asynchronous request completions
+  in the file descriptor so that the application can poll/read there.
+  See knem_io.h and knem-api.html for details.
+  Thanks to Scott Atchley for his help.
+* Regions are now only accessible to processes belonging to the same
+  user, by default. The new KNEM_FLAG_ANY_USER_ACCESS flag should be
+  passed when creating the region to revert to the old behavior where
+  all processes may access a declared region.
+* When reading context verbose stats from /dev/knem as non-root,
+  list all contexts owned by the user.
+* It is now impossible to read (or clear) statistics through a file
+  descriptor attached to a context.
+  + Reading would get NOTIFY_FD completions instead.
+* Fix build with 3.9+ kernels where the dmaengine and idr interfaces
+  have been cleaned up.
+* Fix bugs in the driver mmap error path.
+
+knem 1.0.0 (October 8th 2012)
+=============================
+
+* Fix build with 3.5+ kernels where kmap_atomic changed.
+* Fix build with 3.7+ kernels where MAX_ID_MASK was renamed into MAX_IDR_MASK.
+
+knem 0.9.8 (February 21st 2012)
+===============================
+
+* Add -O option to set minimal workset size in knem_pingpong, to
+  work around caches.
+* Add knem_region_cost program to benchmark region create and destroy.
+* Some RCU cleanups in the driver.
+* Miscellaneous other improvements everywhere, especially in test programs.
+
+knem 0.9.7 (July 29th 2011)
+===========================
+
+* Fix wrong locking when trying to mmap the status array twice.
+* Modify the requirements on the target kernel configuration to better
+  cope with current distribution kernels.
+* Show driver configuration summary at the end of configure.
+* Add support for DMA engine on RHEL/CentOS 5 kernels.
+* Fix support for Linux kernel 3.x releases.
+* Minor documentation improvements.
+
+knem 0.9.6 (April 2nd 2011)
+===========================
+
+* Small pinning performance improvement by removing useless locking.
+* Clarify the reporting of counters when reading /dev/knem.
+* Minor fixes in the driver build configuration.
+* Minor execution fixes to some tests program.
+
+knem 0.9.5 (February 1st 2011)
+==============================
+
+* Fix a race condition that could cause a crash when destroying a region
+  when another process starts accessing it.
+* Fix a memory leak when submitting empty copies.
+* Switch to the new hwloc bitmap API by default.
+
+knem 0.9.4 (December 16th 2010)
+===============================
+
+* Mark pages as dirty when we wrote to a region.
+* Fix check_kernel_headers.sh to properly execute as a shell script in
+  a portable manner.
+
+knem 0.9.3 (October 20th 2010)
+==============================
+
+* Add new "bounded" variants of copy and inline copy ioctls which take
+  an additional length parameter so as not to copy until the end of the
+  given regions or iovecs.
+* Add an non-locally-pinned implementation of inline copy from a local
+  region (write=1).
+  + Disable by default for now since it seems slower in most cases,
+    pinlocalread=0 in module parameters should be passed to enable it.
+* Fix build when configure is invoked with an absolute path.
+* Update documentation about the switch from SVN to GIT.
+
+knem 0.9.2 (August 30th 2010, svn r529)
+=======================================
+
+* Many improvements to the HTML documentation and to the API comments
+  in knem_io.h.
+* Add DKMS support to ease kernel module update when a new kernel is
+  installed. See dkms.conf for details.
+* Fix the detection of hwloc at configure to properly support cross-
+  compilation environments and installations in custom directories.
+* Use automake to implement make check.
+* Misc minor fixes.
+
+knem 0.9.1 (July 6th 2010, svn r488)
+====================================
+The hwloc release.
+
+* When enforcing the kernel thread binding with the BIND_OFFLOAD ioctl,
+  take precedence over the binding kernel module parameter.
+* When hwloc is available, place one process per core by default in
+  knem_collectives instead of one per logical processor.
+* Add knem_offload_test to benchmark the overlapping and copying
+  abilities when offloading the copy on a kernel thread on the same
+  hyperthread, core, socket, ... using hwloc to traverse the topology
+  up to its top.
+* Touch udev rules at the end of RPM package install so that udev reloads
+  them properly once the rdma group was created.
+* Some documentation updates.
+  + Split knem-api.html out of knem.html
+* Add REPORTING-BUGS, README.devel, TODO and autogen.sh to the tarball.
+
+knem 0.9.0 (June 14th 2010, svn r465)
+=====================================
+
+* Wait for deferred callbacks to be done before unloading the module,
+  otherwise the kernel may oops if some processes did not cleanup their
+  resources yet.
+* Remove unneeded locking around idr_for_each.
+* Install a udev rule file in ${prefix}/etc/10-knem.rules so as to
+  make /dev/knem group 'rdma' by default.
+* Add a knem_local_install script to install the module and udev rules in
+  the standard directories so that modprobe finds the module and udev setups
+  the device group automatically.
+* Add a RPM spec file to ease packaging through rpmbuild -tb <tarball>.
+* Document the installation process.
+
+knem 0.8.901 aka 0.9-rc1 (May 18th 2010, svn r447)
+==================================================
+The IDR release.
+
+* Fix process id management when the kernel has been running for a very
+  long time (cookie generation may be wrong, causing the lookup to fail
+  when submitting a copy).
+* Fix build on 2.6.34 kernel.
+* Increase the number of instances that may use knem at the same time:
+  + When using a recent kernel (2.6.27 or later, with RCU-ready IDR), the
+    actual limit is practically unreachable.
+  + Otherwise, bump the limit to 1024 so that each process may use multiple
+    contexts at the same time for different communicators or communication
+    implementations.
+* Improve closing time by releasing resources asynchronously using a RCU
+  callback.
+* Improve region lookup thanks to a IDR instead of a hash table when using
+  a recent kernel (2.6.27 or later, with RCU-ready IDR).
+* Cleanup the allocation of region ids by using a IDA to make really sure
+  two regions will never have the same id at the same time.
+* Applications now must open the device in write mode to get knem features,
+  readers only get the ability to read statistics.
+* Only list other processes in verbose statistics if we have administrator
+  privileges.
+* Add knem_collectives tool program to benchmark Nto1 and 1toN operations
+  with multiple processes accessing a single memory region simultaneously.
+* Add knem_cost tool program to benchmark low-level operations.
+* Rename tools better.
+* Cleanup tools usage.
+* Miscellaneous code rework and improvements.
+* Update documentation and README.
+
+knem 0.8.1 (March 22nd 2010, svn r370)
+======================================
+
+* Switch from CeCILL-B to BSD license.
+* Documentation updates.
+
+knem 0.8.0 (March 3rd 2010, svn r363)
+=====================================
+
+* Fix build on final 2.6.33 kernel.
+* Added a workaround for issues with the kernel build system trying to
+  create files in the build directory during make install.
+
+knem 0.7.901 (February 1st 2010, svn r356)
+==========================================
+The scalable release.
+
+* Use RCU locks to optimize the lookup of the target process and of regions
+  (when the SINGLEUSE flag isn't set).
+* Improve scalability with the number of regions by storing them in a hash
+  table instead of a single list.
+* Fix the status_test user program on 32bit architectures.
+* Fix make check to not try to bind processes on non-existing cores on
+  machines with only 1 or 2 cores.
+* Fix some debug messages in the driver.
+* Do not ignore the DMA copy flag when DMA is disabled totally in the kernel,
+  just don't try to use DMA (as if there was no DMA channel available).
+* No need to setup the DMA cleanup timer if not using DMA.
+* List currently open knem instances and regions when reading /dev/knem
+  when verbose statistics are enabled.
+* Properly handle potential buffer overflow when reading /dev/knem.
+* Cleanup the management of KCC and KARCH when configuring the kernel build.
+
+knem 0.7.0 (December 15th 2009, svn r319)
+=========================================
+
+* Miscellaneous minor changes.
+
+knem 0.6.901 aka 0.7-rc1 (December 1st 2009, svn r313)
+======================================================
+
+* Add a new extended region-based API.
+  + The old API is still supported but may be dropped in the future,
+    see the end of knem_io.h for upgrade instructions.
+* Add status_test and multifd_test tools.
+* Properly report errors in synchronous receive commands.
+* If DMA is requested and not available, ioctls now fails with EINVAL.
+  abi.features may tell if DMA is actually supported.
+* Fix support for kernel 2.6.32.
+* Add a doc/knem.html documentation explaining the ioctl interface.
+
+knem 0.6.0 (June 25th 2009, svn r209)
+=====================================
+
+* Workaround a kernel panic that may occur on 2.6.18 kernels
+  because of the broken vmalloc_user() implementation.
+* Rework the cleanup of pending DMA copies by not waking up the
+  kernel thread every second. Do some cleanup on ioctls instead,
+  and use a timer in case no ioctls is ever invoked.
+  + This change stabilizes performance for long runs thanks to
+    much fewer spurious kernel thread wakeups.
+* Use get_user_pages_fast() when available to improve
+  performance a bit by reducing the pinning overhead.
+* Allow changing the target kernel with --with-linux-release
+  instead of only enforcing its release name within knem.
+* Switch to automake.
+
+knem 0.5.0 (March 9th 2009, svn r167)
+=====================================
+
+* Fix buggy signed/unsigned mixing that causes the driver
+  to never find some valid send lids.
+* Misc cleanups in the driver to improve coding style and
+  make the sparse checker happy.
+* Rework request flags and module parameters to match the
+  now default synchronous mode.
+
+knem 0.4.0 (February 15th 2009, svn r144)
+=========================================
+
+* Bind the kernel thread near as user the process by default
+  (binding=1).
+* Do not offload small copies to the DMA engine, revert to
+  memcpy(). Threshold is 1024 bytes by default.
+* Disable offloading of work to a kernel thread by default.
+  + Rework the corresponding flags and module parameters.
+* More module parameters, request flags, and device features
+  cleanups.
+* Add support for 2.6.29.
+* Dump the driver config when reading /dev/knem.
+* Add some counters, to be dumped with the driver config.
+  + Only strictly consistent in debug mode, for perfomance
+    reasons.
+
+knem 0.3.0 (December 22nd 2008, svn r110)
+=========================================
+
+* Enable DMA by default.
+* Add a binding module parameter and a BIND_OFFLOAD ioctl to bind
+  the kernel thread properly.
+* Add more flags and module parameters to control DMA and memcpy
+  synchronous modes, and cleanup the code all-around.
+* Fix a oops on invalid pid in cookie.
+
+knem 0.2.0 (December 9th 2008, svn r89)
+=======================================
+
+* Add DMA engine support, to be enabled with module parameter dma=1.
+  + CONFIG_NET_DMA is required in the kernel, and the ioatdma kernel
+    module should be loaded.
+* Replace the get-abi ioctl with a new get-info which also retrieves
+  a mask of driver features.
+* Add a flags parameter to send/recv to configure whether the driver
+  should enforce synchronous mode, DMA, ...
+
+knem 0.1.0 (November 16th 2008, svn r70)
+========================================
+
+* Add an asynchronous memcpy implementation (based on a kernel thread
+  for each knem process) and enable it by default.
+  + Add the "sync" module parameter to revert to synchronous memcpy
+    if set to 1.
+  + Add the "pinrecv" module parameter to enforce pinning on the receive
+    side (even in synchronous mode) if set to 1.
+* Add the "debug" module parameter to get kernel messages when an error
+  occurs in the driver.
+  + Add --enable-debug to switch debug on from the configure command
+    line.
+
+knem 0.0.3 (November 13th 2008, svn r35)
+========================================
+
+* Miscellaneous fix and cleanups.
+
+knem 0.0.2 (November 11th 2008, svn r24)
+========================================
+
+* Make the user-space API asynchronous.
+  + The driver still works synchronously for now.
+* Add various examples in the tools directory.
+* Add complete make and make install support.
+* Misc fixes.
+
+knem 0.0.1 (October 29th 2008, svn r0)
+======================================
+
+First release with synchronous memcpy support.

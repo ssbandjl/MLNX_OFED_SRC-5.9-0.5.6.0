@@ -1,0 +1,17 @@
+ofed-scripts (5.9-OFED.5.9.0.5.6) unstable; urgency=low
+
+  * Added hca_self_test.ofed script
+
+ -- Alaa Hleihel <alaa@mellanox.com>  Sun, 08 Jan 2017 18:40:00 +0200
+
+ofed-scripts (2.1-1) unstable; urgency=low
+
+  * Roll 2.1-1 release
+
+ -- Vladimir Sokolovsky <vlad@mellanox.com>  Mon, 25 Feb 2013 21:00:00 +0200
+
+ofed-scripts (2.0-1) unstable; urgency=low
+
+  * Initial release
+
+ -- Vladimir Sokolovsky <vlad@mellanox.com>  Mon, 25 Feb 2013 21:00:00 +0200

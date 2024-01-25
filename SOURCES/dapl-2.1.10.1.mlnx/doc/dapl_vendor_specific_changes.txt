@@ -1,0 +1,394 @@
+	Suggested Vendor-Specific Changes v. 0.92
+        -----------------------------------------
+
+=================
+Table of Contents
+=================
+
+* Table of Contents
+* Introduction
+* Referenced documents
+* Functionality Changes
+	+ Missing Functionality
+		+ dat_evd_resize
+		+ Ordering guarantees on connect/disconnect.
+		+ Shared memory
+		+ dat_cr_handoff
+* Performance optimizations
+	+ Reduction of context switches
+	  [Many interrelated optimizations]
+	+ Reducing copying of data
+		+ Avoidance of s/g list copy on posting
+		+ Avoidance of event data copy from CQ to EVD
+	+ Elimination of locks
+	+ Eliminating subroutine calls		
+
+
+============
+Introduction
+============
+
+This document is a list of functionality enhancements and
+optimizations hardware vendors porting uDAPL may want to consider as
+part of their port.  The functionality enhancements mentioned in this
+document are situations in which HCA Vendors, with their access to
+driver and verb-level source code, and their reduced portability
+concerns, are in a much better position than the reference
+implementation to implement portions of the uDAPL v. 1.0
+specification.  (Additional areas in which the reference
+implementation, because of a lack of time or resources, did not fully
+implement the uDAPL 1.0 specification are not addressed in this file;
+see the file doc/dapl_unimplemented_functionality.txt, forthcoming).
+Vendors should be guided in their implementation of these
+functionality enhancements by their customers need for the features
+involved. 
+
+The optimizations suggested in this document have been identified by
+the uDAPL Reference Implementation team as areas in which performance
+may be improved by "breaching" the IB Verbs API boundary.  They are
+inappropriate for the reference implementation (which has portability
+as one of its primary goals) but may be appropriate for a HCA-specific
+port of uDAPL.  Note that no expected performance gain is attached to
+the suggested optimizations.  This is intentional.  Vendors should be
+guided in their performance improvements by performance evaluations
+done in the context of a representative workload, and the expected
+benefit from a particular optimization weighed against the cost in
+code complexity and scheduling, before the improvement is implemented.
+This document is intended to seed that process; it is not intended to
+be a roadmap for that process.
+
+We divide functionality changes into two categories
+	* Areas in which functionality is lacking in the reference
+	  implementation. 
+	* Areas in which the functionality is present in the reference
+	  implementation, but needs improvement.
+
+We divide performance improvements into three types:
+	* Reducing context switches
+	* Reducing copying of data (*)
+	* Eliminating subroutine calls
+
+(*) Note that the data referred to in "reducing copying of data" is
+the meta data describing an operation (e.g. scatter/gather list or
+event information), not the actual data to be transferred.  No data
+transfer copies are required within the uDAPL reference
+implementation.
+
+====================
+Referenced Documents
+====================
+
+uDAPL: User Direct Access Programming Library, Version 1.0.  Published
+6/21/2002.  http://www.datcollaborative.org/uDAPL_062102.pdf.
+Referred to in this document as the "DAT Specification".
+
+InfiniBand Access Application Programming Interface Specification,
+Version 1.2, 4/15/2002.  In DAPL SourceForge repository at
+doc/api/access_api.pdf.  Referred to in this document as the "IBM
+Access API Specification".
+
+uDAPL Reference Implementation Event System Design.  In DAPL
+SourceForge repository at doc/dapl_event_design.txt.
+
+uDAPL Reference Implementation Shared Memory Design.  In DAPL
+SourceForge repository at doc/dapl_shared_memory_design.txt. 
+
+uDAPL list of unimplmented functionality.  In DAPL SourceForge
+repository at doc/dapl_unimplemented_funcitonality.txt (forthcoming). 
+
+===========================================
+Suggested Vendor Functionality Enhancements
+===========================================
+
+Missing Functionality
+---------------------
+-- dat_evd_resize
+
+The uDAPL event system does not currently implement dat_evd_resize.
+The primary reason for this is that it is not currently possible to
+identify EVDs with the CQs that back them.  Hence uDAPL must keep a
+separate list of events, and any changes to the size of that event
+list would require careful synchronization with all users of that EVD
+(see the uDAPL Event System design for more details).  If the various
+vendor specific optimizations in this document were implemented that
+eliminated the requirement for the EVD to keep its own event list,
+dat_evd_resize might be easily implemented by a call or calls to
+ib_cq_resize. 
+
+-- Ordering guarantees on connect/disconnect.
+
+The DAPL 1.1 specification specifies that if an EVD combines event
+streams for connection events and DTO events for the same endpoint,
+there is an ordering guarantee: the connection event on the AP occurs
+before any DTO events, and the disconnection event occurs after all
+successful DTO events.  Since DTO events are provided by the IBM OS
+Access API through ib_completion_poll (in response to consumer
+request) and connection events are provided through callbacks (which
+may race with consumer requests) there is no trivial way to implement
+this functionality.  The functionality may be implemented through
+under the table synchronizations between EVD and EP; specifically:
+	* The first time a DTO event is seen on an endpoint, if the
+	  connection event has not yet arrived it is created and
+	  delivered ahead of that DTO event.
+	* When a connection event is seen on an endpoint, if a
+	  connection event has already been created for that endpoint
+	  it is silently discarded.
+	* When a disconnection event is seen on an endpoint, it is
+	  "held" until either: a) all expected DTO events for that
+	  endpoint have completed, or b) a DTO marked as "flushed by
+	  disconnect" is received.  At that point it is delivered.
+	  
+Because of the complexity and performance overhead of implementating
+this feature, the DAPL 1.1 reference implementation has chosen to take
+the second approach allowed by the 1.1 specification: disallowing
+integration of connection and data transfer events on the same EVD.
+This fineses the problem, is in accordance with the specification, and
+is more closely aligned with the ITWG IT-API currently in development,
+which only allows a single event stream type for each simple EVD.
+However, other vendors may choose to implement the functionality
+described above in order to support more integration of event streams.
+
+-- Shared memory implementation
+
+The difficulties involved in the dapl shared memory implementation are
+fully described in doc/dapl_shared_memory_design.txt.  To briefly
+recap: 
+
+The uDAPL spec describes a peer-to-peer shared memory model; all uDAPL
+instances indicate that they want to share registration resources for
+a section of memory do so by providing the same cookie.  No uDAPL
+instance is unique; all register their memory in the same way, and no
+communication between the instances is required.
+
+In contrast, the IB shared memory interface requires the first process
+to register the memory to do so using the standard memory registration
+verbs.  All other processes after that must use the shared memory
+registration verb, and provide to that verb the memory region handle
+returned from the initial call.  This means that the first process to
+register the memory must communicate the memory region handle it
+receives to all the other processes who wish to share this memory.
+This is a master-slave model of shared memory registration; the
+initial process (the master), is unique in its role, and it must tell
+the slaves how to register the memory after it.
+
+To translate between these two models, the uDAPL implementation
+requires some mapping between the shared cookie and the memory region
+handle.  This mapping must be exclusive and must have inserts occur
+atomically with lookups (so that only one process can set the memory
+region handle; the others retrieve it).  It must also track the
+deregistration of the shared memory, and the exiting of the processes
+registering the shared memory; when all processes have deregistered
+(possibly by exitting) it must remove the mapping from cookie to
+memory region handle.
+
+This mapping must obviously be shared between all uDAPL
+implementations on a given host.  Implementing such a shared mapping
+is problematic in a pure user-space implementation (as the reference
+implementation is) but is expected to be relatively easy in vendor
+supplied uDAFS implementations, which will presumably include a
+kernel/device driver component.  For this reason, we have chosen to
+leave this functionality unimplemented in the reference implementation.
+
+-- Implementation of dat_cr_handoff
+
+Given that the change of service point involves a change in associated 
+connection qualifier, which has been advertised at the underlying 
+Verbs/driver level, it is not clear how to implement this function
+cleanly within the reference implementation.  We thus choose to defer
+it for implementation by the hardware vendors.
+
+=========================
+Performance Optimizations
+=========================
+
+
+Reduction of context switches
+-----------------------------
+Currently, three context switches are required on the standard
+uDAPL notification path.  These are:
+	* Invocation of the hardware interrupt handler in the kernel.
+	  Through this method the hardware notifies the CPU of
+	  completion queue entries for operations that have requested
+	  notification. 
+	* Unblocking of the per-process IB provider service thread
+	  blocked within the driver.  This thread returns to
+	  user-space within its process, where it causes 
+	* Unblocking of the user thread blocked within the uDAPL entry
+	  point (dat_evd_wait() or dat_cno_wait()).
+	  
+There are several reasons for the high number of context switches,
+specifically: 
+	* The fact that the IB interface delivers notifications
+	  through callbacks rather than through unblocking waiting
+	  threads; this does not match uDAPL's blocking interface.
+	* The fact that the IB interface for blocking on a CQ doesn't
+	  have a threshhold.  If it did, we could often convert a
+	  dat_evd_wait() into a wait on that CQ.
+	* The lack of a parallel concept to the CNO within IB.  
+
+These are all areas in which closer integration between the IB
+verbs/driver and uDAPL could allow the user thread to wait within the
+driver.  This would allow the hardware interrupt thread to directly
+unblock the user thread, saving a context switch.
+
+A specific listing of the optimizations considered here are:
+	* Allow blocking on an IB CQ.  This would allow removal of the
+	  excess context switch for dat_evd_wait() in cases where
+	  there is a 1-to-1 correspondence between an EVD and a CQ and
+	  no threshold was passed to dat_evd_wait(). 
+	* Allow blocking on an IB CQ to take a threshold argument.
+	  This would allow removal of the excess context switch for
+	  dat_evd_wait() in cases where there is a 1-to-1
+	  correspondence between an EVD and a CQ regardless of the
+	  threshold value.
+	* Give the HCA device driver knowledge of and access to the
+	  implementation of the uDAPL EVD, and implement dat_evd_wait()
+	  as an ioctl blocking within the device driver.  This would
+	  allow removal of the excess context switch in all cases for
+	  a dat_evd_wait().
+	* Give the HCA device driver knowledge of and access to the
+	  implementation of the uDAPL CNO, and implement dat_cno_wait()
+	  as an ioctl blocking within the device driver.  This would
+	  allow removal of the excess context switch in all cases for
+	  a dat_cno_wait(), and could improve performance for blocking
+	  on OS Proxy Wait Objects related to the uDAPL CNO.
+
+See the DAPL Event Subsystem Design (doc/dapl_event_design.txt) for
+more details on this class of optimization.
+
+========================
+Reducing Copying of Data
+========================
+
+There are two primary places in which a closer integration between the
+IB verbs/driver and the uDAPL implementation could reducing copying
+costs:
+
+-- Avoidance of s/g list copy on posting
+
+Currently there are two copies involved in posting a data transfer
+request in uDAPL:
+	* From the user context to uDAPL.  This copy is required
+	  because the scatter/gather list formats for uDAPL and IB
+	  differ; a copy is required to change formats.
+	* From uDAPL to the WQE.  This copy is required because IB
+	  specifies that all user parameters are owned by the user
+	  upon return from the IB call, and therefore IB must keep its
+	  own copy for use during the data transfer operation.
+
+If the uDAPL data transfer dispatch operations were implemented
+directly on the IB hardware, these copies could be combined.
+
+-- Avoidance of Event data copy from CQ to EVD
+
+Currently there are two copies of data involved in receiving an event
+in a standard data transfer operation:
+	* From the CQ on which the IB completion occurs to an event
+	  structure held within the uDAPL EVD.  This is because the IB
+	  verbs provide no way to discover how many elements have been
+	  posted to a CQ.  This copy is not
+	  required for dat_evd_dequeue.  However, dat_evd_wait
+	  requires this copy in order to correctly implement the
+	  threshhold argument; the callback must know when to wakeup
+	  the waiting thread.  In addition, copying all CQ entries
+	  (not just the one to be returned) is necessary before
+	  returning from dat_evd_wait in order to set the *nmore OUT
+	  parameter. 
+	* From the EVD into the  event structure provided in the
+	  dat_evd_wait() call.  This copy is required because of the
+	  DAT specification, which requires a user-provided event
+	  structure to the dat_evd_wait() call in which the event
+	  information will be returned.  If dat_evd_wait() were
+	  instead, for example, to hand back a pointer to the already
+	  allocated event structure, that would eventually require the
+	  event subsystem to allocate more event structures.  This is
+	  avoided in the critical path. 
+
+A tighter integration between the IB verbs/driver and the uDAPL
+implementation would allow the avoidance of the first copy.
+Specifically, providing a way to get information as to the number of
+completions on a CQ would allow avoidance of that copy.
+
+See the uDAPL Event Subsystem Design for more details on this class of
+optimization.
+
+====================
+Elimination of Locks
+====================
+
+Currently there is only a single lock used on the critical path in the
+reference implementation, in dat_evd_wait() and dat_evd_dequeue().
+This lock is in place because the ib_completion_poll() routine is not
+defined as thread safe, and both dat_evd_wait() and dat_evd_dequeue()
+are.  If there was some way for a vendor to make ib_completion_poll()
+thread safe without a lock (e.g. if the appropriate hardware/software
+interactions were naturally safe against races), and certain other
+modifications made to the code, the lock might be removed.
+
+The modifications required are:
+	* Making racing consumers from DAPL ring buffers thread safe.
+	  This is possible, but somewhat tricky; the key is to make
+	  the interaction with the producer occur through a count of
+	  elements on the ring buffer (atomically incremented and
+	  decremented), but to dequeue elements with a separate atomic
+	  pointer increment.  The atomic modification of the element
+	  count synchronizes with the producer and acquires the right
+	  to do an atomic pointer increment to get the actual data.
+	  The atomic pointer increment synchronizes with the other
+	  consumers and actually gets the buffer data.
+	* The optimization described above for avoiding copies from
+	  the CQ to the DAPL EVD Event storage queue.  Without this
+	  optimization a potential race between dat_evd_dequeue() and
+	  dat_evd_wait() exists where dat_evd_dequeue will return an
+	  element advanced in the event stream from the one returned
+	  from dat_evd_wait():
+
+					dat_evd_dequeue() called
+
+					  EVD state checked; ok for
+					  dat_evd_dequeue()
+		dat_evd_wait() called
+
+		  State changed to reserve EVD
+		  for dat_evd_wait() 
+
+		  Partial copy of CQ to EVD Event store
+
+					  Dequeue of CQE from CQ
+
+		  Completion of copy of CQ to EVD Event store
+
+		  Return of first CQE copied to EVD Event store.
+
+					  Return of thie CQE from the middle
+					  of the copied stream.
+
+
+	  If no copy occurs, dat_evd_wait() and dat_evd_dequeue() may
+	  race, but if all operations on which they may race (access
+	  to the EVD Event Queue and access to the CQ) are thread
+	  safe, this race will cause no problems.
+
+============================
+Eliminating Subroutine Calls
+============================
+
+This area is the simplest, as there are many DAPL calls on the
+critical path that are very thin veneers on top of their IB
+equivalents.  All of these calls are canidates for being merged with
+those IB equivalents.  In cases where there are other optimizations
+that may be acheived with the call described above (e.g. within the
+event subsystem, the data transfer operation posting code), that call
+is not mentioned here: 
+	* dat_pz_create
+	* dat_pz_free
+	* dat_pz_query
+	* dat_lmr_create
+	* dat_lmr_free
+	* dat_lmr_query
+	* dat_rmr_create
+	* dat_rmr_free
+	* dat_rmr_query
+	* dat_rmr_bind
+
+	

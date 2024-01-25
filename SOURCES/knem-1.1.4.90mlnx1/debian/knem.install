@@ -1,0 +1,17 @@
+etc/udev/rules.d/10-knem.rules
+usr/lib/pkgconfig/knem.pc
+opt/knem-*/bin/knem_loopback
+opt/knem-*/bin/knem_pingpong
+opt/knem-*/bin/knem_collectives
+opt/knem-*/bin/knem_access_rights_test
+opt/knem-*/bin/knem_multifd_test
+opt/knem-*/bin/knem_status_test
+opt/knem-*/bin/knem_notify_fd_test
+opt/knem-*/bin/knem_vect_test
+opt/knem-*/bin/knem_cost
+opt/knem-*/bin/knem_region_cost
+opt/knem-*/etc/10-knem.rules
+opt/knem-*/sbin/knem_local_install
+opt/knem-*/share/doc/knem/knem.html
+opt/knem-*/share/doc/knem/knem-api.html
+opt/knem-*/include/knem_io.h

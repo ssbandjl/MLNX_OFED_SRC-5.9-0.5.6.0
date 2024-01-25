@@ -1,0 +1,32 @@
+* knem mfence flag to force memory barrier between segment writes to ease synchronization when
+  adding a notification flag at the end of the copy
+
+* benchmarks the addition of a small iovec to a given copy, either on
+  send or recv side
+
+* add knem_truncate_test to check that misc region/length/offset/truncation works fine
+
+* try modifying the alignment wrt to source or dest regions
+
+* do a schedule from time to time during long memcpy ?
+
+* debian packaging
+
+* manpages
+
+* add some offset to vect_test
+* add some integrity check to loopback_perf
+* add verbose check to loopback_perf
+
+* use MMX/SSE and friends with optimized kernel copy routines
+
+* integrate sync dmacpy polling within the partial cleanup
+* add a dmacleanuplate module param to cleanup partially at the end of
+  ioctls only
+
+* offload pinning
+  + and support pinning overlap properly
+* pin while submitting DMA copies to overlap more
+
+* fix the lockup when process is killed by force?
+  + problem with the vmalloc pages being freed while used by ioat ?

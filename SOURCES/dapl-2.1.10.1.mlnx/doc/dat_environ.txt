@@ -1,0 +1,45 @@
+		DAT Environment Guide v. 0.01
+                -----------------------------
+
+The following environment variables affect the behavior of the DAT
+library: 
+
+
+DAT_OVERRIDE
+------------
+ Value used as the static registry configuration file, overriding the
+ default location, /etc/dat.conf
+
+ Example: setenv DAT_OVERRIDE /path/to/my/private.conf
+
+
+DAT_DBG_TYPE
+------------
+
+ Value specifies which parts of the registry will print debugging
+ information, valid values are  
+
+    DAT_OS_DBG_TYPE_ERROR 		= 0x1
+    DAT_OS_DBG_TYPE_GENERIC 		= 0x2
+    DAT_OS_DBG_TYPE_SR  		= 0x4
+    DAT_OS_DBG_TYPE_DR  		= 0x8
+    DAT_OS_DBG_TYPE_PROVIDER_API 	= 0x10
+    DAT_OS_DBG_TYPE_CONSUMER_API 	= 0x20
+    DAT_OS_DBG_TYPE_ALL 		= 0xff
+
+ or any combination of these. For example you can use 0xC to get both 
+ static and dynamic registry output.
+
+ Example setenv DAT_DBG_TYPE 0xC
+  
+DAT_DBG_DEST
+------------ 
+
+ Value sets the output destination, valid values are 
+  
+    DAT_OS_DBG_DEST_STDOUT              = 0x1
+    DAT_OS_DBG_DEST_SYSLOG              = 0x2 
+    DAT_OS_DBG_DEST_ALL                 = 0x3 
+  
+ For example, 0x3 will output to both stdout and the syslog. 
+

@@ -1,0 +1,12 @@
+
+#include "cmd/dapl_main.c"
+#include "cmd/dapl_params.c"
+#include "cmd/dapl_fft_cmd.c"
+#include "cmd/dapl_getopt.c"
+#include "cmd/dapl_limit_cmd.c"
+#include "cmd/dapl_netaddr.c"
+#include "cmd/dapl_performance_cmd.c"
+#include "cmd/dapl_qos_util.c"
+#include "cmd/dapl_quit_cmd.c"
+#include "cmd/dapl_server_cmd.c"
+#include "cmd/dapl_transaction_cmd.c"

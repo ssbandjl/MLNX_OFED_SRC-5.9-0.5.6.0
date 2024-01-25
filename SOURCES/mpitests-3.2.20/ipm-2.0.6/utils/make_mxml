@@ -1,0 +1,13 @@
+#!/bin/sh
+
+tar -xzvf mxml-2.6.tar.gz
+cd mxml-2.6
+./configure --prefix=$PWD/../mxml
+
+# INSTALL_DIR is used during HPCX build for other purposes
+mv Makefile Makefile.orig
+sed 's/INSTALL_DIR/MXML_INSTALL_DIR/g' Makefile.orig > Makefile
+
+make 
+make install
+cd ..

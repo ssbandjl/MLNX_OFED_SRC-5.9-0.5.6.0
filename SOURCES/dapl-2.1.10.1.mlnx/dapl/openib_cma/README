@@ -1,0 +1,40 @@
+
+OpenIB uDAPL provider using rdma cma and openib verbs interfaces 
+
+to build:
+
+cd dapl/udapl
+make VERBS=openib_cma clean
+make VERBS=openib_cma
+
+
+Modifications to common code:
+
+- added dapl/openib_cma directory 
+
+	dapl/udapl/Makefile
+
+New files for openib_scm provider
+
+	dapl/openib_cma/dapl_ib_cq.c
+	dapl/openib_cma/dapl_ib_dto.h
+	dapl/openib_cma/dapl_ib_mem.c
+	dapl/openib_cma/dapl_ib_qp.c
+	dapl/openib_cma/dapl_ib_util.c
+	dapl/openib_cma/dapl_ib_util.h
+	dapl/openib_cma/dapl_ib_cm.c
+
+A simple dapl test just for openib_scm testing...
+
+	test/dtest/dtest.c
+	test/dtest/makefile
+
+	server:	dtest -s 
+	client:	dtest -h hostname
+
+known issues:
+
+	no memory windows support in ibverbs, dat_create_rmr fails.
+	
+
+

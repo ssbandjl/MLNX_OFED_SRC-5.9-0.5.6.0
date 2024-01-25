@@ -1,0 +1,5 @@
+mpitests (3.2.20-de56b6b.59056) unstable; urgency=log
+
+  * Initial port for Ubuntu
+
+ -- Aleksey Senin <alekseys@mellanox.com>  Thu, 06 Jun 2013 10:24:50 +0300

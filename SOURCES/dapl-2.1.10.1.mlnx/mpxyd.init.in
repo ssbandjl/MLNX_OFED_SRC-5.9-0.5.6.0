@@ -1,0 +1,107 @@
+#!/bin/bash
+#
+# Bring up/down the mpxyd daemon
+#
+# chkconfig: 2345 25 75
+# description: Starts/Stops MIC SCIF/DAPL RDMA proxy server
+#
+### BEGIN INIT INFO
+# Provides:       mpxyd
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Required-Start: 
+# Required-Stop: 
+# Should-Start:
+# Should-Stop:
+# Short-Description: Starts and stops the MIC SCIF/DAPL RDMA proxy server
+# Description: The DAPL proxy RDMA server provides a user space implementation
+#    that enables MIC clients to proxy InfiniBand RDMA over to large core resources
+### END INIT INFO
+
+ulimit -n 16000
+
+prog=mpxyd
+execpath=@prefix@/sbin/${prog}
+pidfile=`grep ^lock_file @sysconfdir@/mpxyd.conf | awk '{print $2}'`
+subsys=/var/lock/subsys/${prog}
+
+# Source function library.
+if [ -f /etc/init.d/functions ]; then
+    # RHEL
+    . /etc/init.d/functions
+    _status='status -p "$pidfile" -l $subsys'
+    _start='daemon --check $prog --pidfile "$pidfile"'
+    _ret='echo; return $RC'
+elif [ -f /etc/rc.status ]; then
+    # SLES
+    . /etc/rc.status
+    _status=checkproc
+    _start='start_daemon -p "$pidfile"'
+    _ret='rc_status -v'
+else
+    # other
+    echo "Could not source init function library, exiting"
+    return 1
+fi
+
+start()
+{
+    echo -n "Starting mpxyd daemon: "
+
+    eval $_start $execpath
+    RC=$?
+
+    [ "$RC" -eq "0" ] && touch $subsys 2>/dev/null
+
+    eval $_ret
+}
+
+stop()
+{
+    echo -n "Stopping mpxyd daemon: "
+
+    killproc -p $pidfile $execpath
+    RC=$?
+    rm -f $subsys
+
+    eval $_ret
+}
+
+sstatus()
+{
+    eval $_status $execpath RC=$?
+    eval $_ret
+}
+
+restart ()
+{
+    stop
+    start
+}
+
+condrestart ()
+{
+    [ -e $subsys ] && restart || return 0
+}
+
+usage ()
+{
+    echo
+    echo "Usage: `basename $0` {start|stop|restart|condrestart|try-restart|force-reload|status}"
+    echo
+    return 2
+}
+
+case $1 in
+    start) start; RC=$? ;;
+    stop) stop; RC=$? ;;
+    restart) restart; RC=$? ;;
+    reload) RC=3 ;;
+    condrestart) condrestart; RC=$? ;;
+    try-restart) condrestart; RC=$? ;;
+    force-reload) condrestart; RC=$? ;;
+    status) sstatus; RC=$? ;;
+    *) usage; RC=$? ;;
+esac
+
+exit $RC

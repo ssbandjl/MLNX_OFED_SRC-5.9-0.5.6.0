@@ -1,0 +1,2 @@
+# libefa, libmana and libmlx5 are ibverbs provider that provides more functions.
+ibverbs-providers: package-name-doesnt-match-sonames libmana1 libmlx5-1

@@ -1,0 +1,168 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+#
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+#export DH_VERBOSE=1
+
+PACKAGE=openvswitch
+PACKAGE_DKMS=openvswitch-datapath-dkms
+include /usr/share/dpkg/pkg-info.mk
+
+BUILD_DIR=debian/build
+
+HAS_PYTHON2_DEB = $(shell if [ "`dpkg-query -W -f '$${Version}\n' python2 2>/dev/null`" ]; then echo 1; else echo 0; fi)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+PARALLEL = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+PARALLEL =
+endif
+
+ifneq (,$(filter shared,$(DEB_BUILD_OPTIONS)))
+BUILD_TYPE := --enable-shared --disable-static
+EXCLUDE := --exclude .a
+else
+BUILD_TYPE := --disable-shared --enable-static
+EXCLUDE := --exclude .so.* --exclude .so
+endif
+
+%:
+	dh $@ --builddirectory=$(BUILD_DIR) --with autoreconf,python3 --parallel
+
+# use --as-needed only if supported by dh-autoreconf (to simplify backporting)
+DH_AS_NEEDED=$(shell dpkg --compare-versions $$(dpkg --status dh-autoreconf | grep Version | cut -d' ' -f2) ge 6 && echo --as-needed)
+override_dh_autoreconf:
+	dh_autoreconf $(DH_AS_NEEDED)
+
+# WITH_DPDK is set only if /opt/mellanox/dpdk exists.
+DPDK_INSTALL ?= /opt/mellanox/dpdk
+ifneq (,$(shell readlink -e $(DPDK_INSTALL)))
+WITH_DPDK := --with-dpdk=$(DPDK_INSTALL)
+DPDK_PKGCONFIG := $(shell find $(DPDK_INSTALL) -type f -name libdpdk.pc -exec dirname {} \;)
+DPDK_LIB_DIR := $(shell PKG_CONFIG_PATH=$(DPDK_PKGCONFIG) pkg-config --libs-only-L libdpdk)
+endif
+
+BACKUP_PATH=debian/backup
+override_dh_auto_configure:
+	if [ -f config.status -a ! -f debian/config.status ]; then \
+		mv config.status debian/ ; \
+	fi
+	find . -name \*.in | \
+	while read file; do \
+		real=$${file%.in}; \
+		path=$${file%/*}; \
+		base=$${real##*/}; \
+		mkdir -p $(BACKUP_PATH)/$$path; \
+		new="$(BACKUP_PATH)/$$path/$$base"; \
+		if [ -f "$$real" -a ! -f "$$new" ]; then mv "$$real" "$$new"; fi; \
+	done
+	dh_auto_configure -- --enable-ssl \
+		$(BUILD_TYPE) \
+		$(WITH_DPDK) \
+		$(DATAPATH_CONFIGURE_OPTS) $(EXTRA_CONFIGURE_OPTS)
+
+# No need for 'make clean': debian/clean drops that
+# Just restore generated tarball files from backup
+# and also make sure there's no call to 'make clean'
+override_dh_auto_clean:
+	find . -name "*.pyc" -delete
+	if [ -f debian/config.status ]; then \
+		mv debian/config.status ./ ; \
+	fi
+	find . -name \*.in | \
+	while read file; do \
+		real=$${file%.in}; \
+		path=$${file%/*}; \
+		base=$${real##*/}; \
+		new="$(BACKUP_PATH)/$$path/$$base"; \
+		if [ -f "$$new" ]; then mv "$$new" "$$real"; fi; \
+	done
+	rm -rf $(BACKUP_PATH)
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	if $(MAKE) -C $(BUILD_DIR) $(PARALLEL) check TESTSUITEFLAGS='$(PARALLEL)' RECHECK=yes; then :; \
+	else \
+		cat tests/testsuite.log; \
+		exit 1; \
+	fi
+endif
+
+override_dh_auto_install:
+	dh_auto_install
+	# For dh_missing:
+	rm -rf \
+		$(CURDIR)/debian/tmp/usr/share/man \
+		$(CURDIR)/debian/tmp/usr/lib/*/lib*.la \
+		#
+
+override_dh_auto_build:
+	dh_auto_build -- dist distdir=openvswitch
+
+override_dh_auto_clean:
+	rm -f python/ovs/*.pyc python/ovs/db/*.pyc
+	dh_auto_clean
+
+override_dh_install-arch:
+	dh_install -a $(EXCLUDE)
+	# openvswitch-switch
+	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
+
+override_dh_install-indep:
+	dh_install -i $(EXCLUDE)
+
+	# openvswitch-datapath-source
+	cp debian/rules.modules debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
+	chmod 755 debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
+	cd debian/openvswitch-datapath-source/usr/src && tar -c modules | bzip2 -9 > openvswitch-datapath.tar.bz2 && rm -rf modules
+
+	# openvswitch-datapath-dkms
+	# setup the dirs
+	dh_installdirs -p$(PACKAGE_DKMS) usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)
+
+	# copy the source
+	cd debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM) && tar xvzf $(CURDIR)/$(BUILD_DIR)/openvswitch.tar.gz && mv openvswitch/* openvswitch/.[a-z]* . && rmdir openvswitch
+
+	# check we can get kernel module names
+	$(MAKE) -C $(BUILD_DIR)/datapath print-build-modules
+
+	# Prepare dkms.conf from the dkms.conf.in template
+	sed "s/__VERSION__/$(DEB_VERSION_UPSTREAM)/g; s/__MODULES__/$(shell $(MAKE) -C $(BUILD_DIR)/datapath print-build-modules | grep -v make)/" debian/dkms.conf.in > debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/dkms.conf
+
+	# We don't need the debian folder in there, just upstream sources...
+	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/debian
+	# We don't need the rhel stuff in there either
+	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/rhel
+	# And we should also clean useless license files, which are already
+	# described in our debian/copyright anyway.
+	rm -f debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/xenserver/LICENSE
+
+override_dh_missing:
+	dh_missing --fail-missing $(EXCLUDE)
+
+override_dh_shlibdebs:
+	dh_shlibdeps $@ -l$(WITH_DPDK)/lib
+
+override_dh_installinit:
+	dh_installinit -R
+
+override_dh_strip:
+	dh_strip --dbg-package=openvswitch-dbg
+
+override_dh_usrlocal:
+
+override_dh_installman:
+	dh_installman --language=C
+
+ifeq ($(HAS_PYTHON2_DEB),1)
+override_dh_gencontrol:
+	dh_gencontrol
+	sed -i '/^Depends:/s/python\([ ,]\)/python2\1/' debian/*/DEBIAN/control
+endif

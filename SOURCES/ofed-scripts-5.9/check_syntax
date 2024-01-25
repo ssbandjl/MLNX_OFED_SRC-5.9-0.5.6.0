@@ -1,0 +1,32 @@
+#!/bin/sh
+
+errors=""
+
+perl_check() {
+	output=`perl -w -c "$1" 2>&1`
+	rc=$?
+	echo "$output" | grep -v ' syntax OK'
+	if [ "$rc" != 0 ]; then
+		errors="$errors $1"
+	fi
+}
+
+bash_check() {
+	bash -n "$1"
+	rc=$?
+	if [ "$rc" != 0 ]; then
+		errors="$errors $1"
+	fi
+}
+
+for s in install.pl  install_deb.pl mlnxofedinstall mlnxofedinstall_deb.pl uninstall.sh uninstall_deb.sh common.pl; do
+	perl_check ./$s
+done
+for s in is_kmp_compat.sh  mlnx_add_kernel_support.sh  vendor_post_uninstall.sh  vendor_pre_uninstall.sh check_syntax; do
+	bash_check ./$s
+done
+
+if [ "$errors" != "" ]; then
+	echo " -E- Found errors in $errors."
+	exit 1
+fi

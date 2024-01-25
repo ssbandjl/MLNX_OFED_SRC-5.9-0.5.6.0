@@ -1,0 +1,12 @@
+Source: ofed-scripts
+Section: utils
+Priority: extra
+Maintainer: Vladimir Sokolovsky <vlad@mellanox.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.2
+Homepage: http://www.mellanox.com
+
+Package: ofed-scripts
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: MLNX_OFED utilities

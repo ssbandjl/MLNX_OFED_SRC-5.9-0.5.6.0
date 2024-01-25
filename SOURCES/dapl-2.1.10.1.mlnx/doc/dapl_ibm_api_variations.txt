@@ -1,0 +1,34 @@
+
+		DAPL Variations from IBM OS Access API
+                --------------------------------------
+
+The DAPL reference implementation is targetted at the IBM OS Access
+API (see doc/api/IBM_access_api.pdf).  However, in the course of
+developing the reference implementation it has become necessary to
+alter or enhance this API specification in minor ways.  This document
+describes the ways in which the Access API has been altered to
+accomodate the needs of the reference implementation.
+
+Note that this document is a work in progress/a place holder; it does
+not yet contain all of the API variations used by the reference
+implementation.  It is intended that it will be brought up to date
+before the final release of the DAPL reference implementation.
+
+The variations from the IBM OS Access API are listed below.
+
+-- Thread safety
+
+The IBM OS Access API specifies:
+
+"Implementation of the Access APIs should ensure that multiple threads
+ can call the APIs, provided they do not access the same InfiniBand
+ entity (such as a queue pair or a completion queue)."
+
+This has been extended in two ways:
+	* It is safe for multiple threads to call into the API
+	  accessing the same HCA.
+	* Threads calling ib_post_send_req on a particular QP do not
+	  conflict with threads calling ib_post_rcv_req on the same
+	  QP.  I.e. while there cannot be multiple threads in
+	  ib_post_send_req or ib_post_rcv_req on the same QP, there
+	  may be one thread in each routine simultaneously.

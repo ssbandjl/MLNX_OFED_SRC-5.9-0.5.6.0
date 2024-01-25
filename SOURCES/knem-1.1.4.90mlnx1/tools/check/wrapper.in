@@ -1,0 +1,169 @@
+#!/bin/bash
+
+# Copyright © inria 2010
+# Brice Goglin <Brice.Goglin@inria.fr>
+# Ludovic Stordeur <Ludovic.Stordeur@inria.fr>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. The name of the author may not be used to endorse or promote products
+#    derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+# OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+abs_builddir=@abs_builddir@
+
+pre_check() {
+    grep -q knem /proc/modules        || { echo 'module not loaded' >&2 && return 1       ;}
+    test -c /dev/knem -a -r /dev/knem || { echo 'device not accessible' >&2 && return 1   ;}
+}
+
+if test -d /sys/devices/system/cpu/cpu1 && grep 0 /sys/devices/system/cpu/cpu1/online 2>&1 >/dev/null; then
+  KNEM_PINGPONG_BINDING=0,0
+else if test -d /sys/devices/system/cpu/cpu2 && grep 0 /sys/devices/system/cpu/cpu2/online 2>&1 >/dev/null; then
+  KNEM_PINGPONG_BINDING=0,1
+else
+  KNEM_PINGPONG_BINDING=1,2
+fi fi
+
+pre_check || exit 77
+
+testname=`basename $0`
+case $testname in
+status.sh)
+		echo "*********************************"
+		echo "Checking status and return values"
+		${abs_builddir}/../knem_status_test
+		;;
+accessrights.sh)
+		echo "**********************"
+		echo "Checking access rights"
+		sudo ${abs_builddir}/../knem_access_rights_test $(id -u)
+		;;
+multifd.sh)
+		echo "****************************************************"
+		echo "Checking with multiple descriptors at the same time"
+		${abs_builddir}/../knem_multifd_test
+		;;
+notify_fd.sh)
+		echo "******************"
+		echo "Checking notify_fd"
+		${abs_builddir}/../knem_notify_fd_test
+		;;
+cost.sh)
+		echo "**************"
+		echo "Checking costs"
+		${abs_builddir}/../knem_cost
+		;;
+regioncost.sh)
+		echo "********************"
+		echo "Checking regio costs"
+		${abs_builddir}/../knem_region_cost
+		;;
+offload.sh)
+		if test -f ${abs_builddir}/../knem_offload_test; then
+			echo "*******************************"
+			echo "Checking offloading performance"
+			${abs_builddir}/../knem_offload_test
+		else
+			echo "***************************************"
+			echo "knem_offload_test unsupported, skipping"
+			exit 77
+		fi
+		;;
+vect1.sh)
+		echo "****************************"
+		echo "Checking vectorial transfers"
+		${abs_builddir}/../knem_vect_test
+		;;
+vect2.sh)
+		echo "***********************************************"
+		echo "Checking vectorial transfers with local pinning"
+		${abs_builddir}/../knem_vect_test -F 16
+		;;
+vect3.sh)
+		echo "*************************************"
+		echo "Checking vectorial transfers with DMA"
+		${abs_builddir}/../knem_vect_test -d
+		;;
+vect4.sh)
+		echo "************************************"
+		echo "Checking reverse vectorial transfers"
+		${abs_builddir}/../knem_vect_test -R
+		;;
+vect5.sh)
+		echo "*******************************************************"
+		echo "Checking reverse vectorial transfers with local pinning"
+		${abs_builddir}/../knem_vect_test -R -F 16
+		;;
+vect6.sh)
+		echo "*********************************************"
+		echo "Checking reverse vectorial transfers with DMA"
+		${abs_builddir}/../knem_vect_test -R -d
+		;;
+loopback1.sh)
+		echo "*****************************"
+		echo "Checking loopback performance"
+		${abs_builddir}/../knem_loopback -D
+		;;
+loopback2.sh)
+		echo "********************************************"
+		echo "Checking loopback performance with all flags"
+		${abs_builddir}/../knem_loopback -F 63
+		;;
+pingpong1.sh)
+		echo "*****************************"
+		echo "Checking pingpong performance"
+		${abs_builddir}/../knem_pingpong -b $KNEM_PINGPONG_BINDING -D
+		;;
+pingpong2.sh)
+		echo "**************************************"
+		echo "Checking pingpong performance with DMA"
+		${abs_builddir}/../knem_pingpong -b $KNEM_PINGPONG_BINDING
+		;;
+pingpong3.sh)
+		echo "********************************************"
+		echo "Checking pingpong performance with all flags"
+		${abs_builddir}/../knem_pingpong -b $KNEM_PINGPONG_BINDING -F 63
+		;;
+collectives1.sh)
+		echo "******************************"
+		echo "Checking broadcast performance"
+		${abs_builddir}/../knem_collectives -D
+		;;
+collectives2.sh)
+		echo "***************************"
+		echo "Checking gather performance"
+		${abs_builddir}/../knem_collectives -R -s -D
+		;;
+collectives3.sh)
+		echo "*********************************************"
+		echo "Checking master-initiated scatter performance"
+		${abs_builddir}/../knem_collectives -D -m -s
+		;;
+collectives4.sh)
+		echo "*******************************************************"
+		echo "Checking master-initiated reverse-broadcast performance"
+		${abs_builddir}/../knem_collectives -R -m -D
+		;;
+*)
+		echo "############"
+		echo "Unknown test: $0" >&2
+		exit 1
+esac
+

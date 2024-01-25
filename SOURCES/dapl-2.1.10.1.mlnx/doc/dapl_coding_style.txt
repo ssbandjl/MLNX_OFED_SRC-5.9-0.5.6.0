@@ -1,0 +1,264 @@
+#######################################################################
+#                                                                     #
+# DAPL Coding style reference                                         #
+#                                                                     #
+# Steve Sears                                                         #
+# sjs2 at users.sourceforge.net                                       #
+#                                                                     #
+# 12/13/2002                                                          #
+#                                                                     #
+#######################################################################
+
+======================================================================
+Introduction
+======================================================================
+
+The purpose of this document is to establish the coding style adopted by
+the team implementing the DAPL reference implementation. The rules
+presented here were arrived at by consensus, they are intended to
+provide consistency of implementation and make it intuitive to work with
+the source code.
+
+======================================================================
+Source code conventions
+======================================================================
+
+1. Brackets
+
+   Brackets should follow C99 conventions and declare a block. The
+   following convention is followed:
+
+   if (x)
+   {
+	statement;
+	statement;
+   }
+
+   The following bracket styles are to be avoided:
+
+    K&R style:
+
+   if (x) {		/* DON'T DO THIS */
+	statement;
+   }
+
+   GNU style:
+
+   if (x)		/* DON'T DO THIS */
+	{
+	statement;
+	}
+
+   Statements are always indented from brackets.
+
+   Brackets are always used for any statement in order to avoid dangling
+   clause bugs. E.g.
+
+   RIGHT:
+	if ( x )
+	{
+	    j = 0;
+	}
+
+   WRONG:
+	if ( x )
+	    j = 0;
+
+2. Indents
+
+   Indents are always 4, tabs 8. A tab may serve as a double
+   indent. Many of the reference implementation file have an emacs
+   format statement at the bottom.
+
+3. Comments
+
+   Comments are always full C style comments, and never C++
+   style. Comments take the form:
+
+   /*
+    * comment
+    */
+
+4. Variable Declarations
+
+   Variables are always declared on their own line, we do not declare
+   multiple variables on the same line.
+
+   Variables are never initialized in their declaration, they are
+   initialized in the body of the code.
+
+5. Function Declarations
+
+   The return type of a function is declared on a separate line from the
+   function name.
+
+   Parameters each receive a line and should be clearly labeled as IN
+   or OUT or INOUT. Parameter declarations begin one tab stop from the
+   margin.
+
+   For example:
+
+   DAT_RETURN
+   dapl_function (
+	IN	DAT_IA_HANDLE	   	ia_handle,
+	OUT	DAT_EP_HANDLE	   	*ep_handle )
+   {
+	... function body ...
+   }
+
+5. White space
+
+   Don't be afraid of white space, the goal is to make the code readable
+   and maintainable. We use white space:
+
+   - One space following function names or conditional expressions. It
+     might be better to say one space before any open parenthesis.
+
+   - Suggestion: One space following open parens and one space before
+     closing parens. Not all of the code follows this convention, use
+     your best judgment.
+
+   Example:
+
+        foo ( x1, x2 );
+
+6. Conditional code
+
+   We generally try to avoid conditional compilation, but there are
+   certain places where it cannot be avoided. Whenever possible, move
+   the conditional code into a macro or otherwise work to put it into an
+   include file that can be used by the platform (e.g. Linux or Windows
+   osd files), or by the underlying provider (e.g. IBM Torrent or
+   Mellanox Tavor).
+
+   Conditionals should be descriptive, and the associated #endif should
+   contain the declaration. E.g.
+
+   #ifdef THIS_IS_AN_EXAMPLE
+
+	  /* code */
+
+   #endif /* THIS_IS_AN_EXAMPLE */
+
+   You may change the ending comment if a #else clause is present. E.g.
+   
+   #ifdef THIS_IS_AN_EXAMPLE
+	  /* code */
+
+   #else
+	  /* other code */
+
+   #endif /* !THIS_IS_AN_EXAMPLE */
+   
+
+======================================================================
+Naming conventions
+======================================================================
+
+1. Variable Names
+
+   Variable names for DAPL data structures generally follow their type
+   and should be the same in all source files. A few examples:
+
+   Handles
+   DAT_IA_HANDLE   	ia_handle
+   DAT_EP_HANDLE   	ep_handle
+
+   Pointers
+
+   DAPL_IA		*ia_ptr;
+   DAPL_EP		*ep_ptr;
+
+2. Return Code Names
+
+   There are at least two different subsystems supported in the DAPL
+   reference implementation. In order to bring sanity to the error
+   space, return codes are named and used for their appropriate
+   subsystem. E.g.
+
+   ib_status:  InfiniBand status return code
+   dat_status: DAT/DAPL return code
+
+3. Function Names
+
+   Function names describe the scope to which they apply. There are
+   essentially three names in the reference implementation:
+
+   dapl_*      Name of an exported function visible externally.
+	       These functions have a 1 to 1 correspondence to
+	       their DAT counterparts.
+
+   dapls_*     Name of a function that is called from more than one
+	       source file, but is limited to a subsystem.
+
+   dapli_*     Local function, internal to a file. Should always be
+	       of type STATIC.
+
+
+======================================================================
+Util files
+======================================================================
+
+The Reference implementation is organized such that a single, exported
+function is located in its' own file. If you are trying to find the DAPL
+function to create and End Point, it will be found in the dapl version
+of the DAT function in the spec. E.g.
+
+dapl_ep_create() is found in dapl_ep_create.c
+dapl_evd_free() is found in dapl_evd_free.c
+
+It is often the case that the implementation must interact with data
+structures  or call into other subsystems. All utility functions for a
+subsystem are gathered into the appropriate "util" file. 
+
+For example, dapl_ep_create must allocate a DAPL_EP structure. The
+routine to allocate and initialize memory is found in the
+dapl_ep_util.c file and is named dapl_ep_alloc(). Appropriate routines
+for the util file are
+
+    - Alloc
+    - Free
+    - Assign defaults
+    - linking routines
+    - Check restrictions
+    - Perform operations on a data structure.
+
+The idea of a util file is an object oriented idea for a non OO
+language. It encourages a clean implementation.
+
+For each util.c file, there is also a util.h file. The purpose of the
+util include file is to define the prototypes for the util file, and to
+supply any local flags or values necessary to the subsystem.
+
+======================================================================
+Include files, prototypes
+======================================================================
+
+Include files are organized according to subsystem and/or OS
+platform. The include directory contains files that are global to the
+entire source set. Prototypes are found in include files that pertain to
+the data they support.
+
+Commenting on the DAPL Reference Implementation tree:
+
+	   dapl/common
+	   dapl/include
+		Contains global dapl data structures, symbols, and
+		prototypes
+	   dapl/tavor
+		Contains tavor prototypes and symbols
+	   dapl/torrent
+		Contains torrent prototypes and symbols
+	   dapl/udapl
+		Contains include files to support udapl specific files
+	   dapl/udapl/linux
+		Contains osd files for Linux
+	   dapl/udapl/windows
+		Contains osd files for Windows
+
+For completeness, the dat files described by the DAT Specification are
+in the tree under the dat/ subdirectory,
+
+	    dat/include/dat/
+
+

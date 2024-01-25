@@ -1,0 +1,55 @@
+!if $(FREEBUILD)
+TARGETNAME=dapl2-ofa-cma
+!else
+TARGETNAME=dapl2-ofa-cmad
+!endif
+
+TARGETPATH = ..\..\..\..\bin\user\obj$(BUILD_ALT_DIR)
+TARGETTYPE = DYNLINK
+DLLENTRY = _DllMainCRTStartup
+
+!if $(_NT_TOOLS_VERSION) == 0x700
+DLLDEF=$O\udapl_ofa_cma_exports.def
+!else
+DLLDEF=$(OBJ_PATH)\$O\udapl_ofa_cma_exports.def
+!endif
+
+USE_MSVCRT = 1
+
+SOURCES = \
+	udapl.rc \
+	..\dapl_common_src.c			\
+	..\dapl_udapl_src.c			\
+	..\openib_common.c 			\
+	device.c				\
+	cm.c
+
+INCLUDES = ..\include;..\openib_common;..\common;windows;..\..\dat\include;\
+		   ..\..\dat\udat\windows;..\udapl\windows;..\..\..\..\inc\user\linux;\
+		   ..\..\..\..\inc;..\..\..\..\inc\user;..\..\..\libibverbs\include;\
+		   ..\..\..\librdmacm\include
+
+DAPL_OPTS = -DEXPORT_DAPL_SYMBOLS -DDAT_EXTENSIONS -DOPENIB -DCQ_WAIT_OBJECT #-DDAPL_COUNTERS
+
+USER_C_FLAGS = $(USER_C_FLAGS) $(DAPL_OPTS)
+
+!if !$(FREEBUILD)
+USER_C_FLAGS = $(USER_C_FLAGS) -DDAPL_DBG
+!endif
+
+TARGETLIBS= \
+	$(SDK_LIB_PATH)\kernel32.lib \
+	$(SDK_LIB_PATH)\ws2_32.lib \
+!if $(FREEBUILD)
+	$(TARGETPATH)\*\dat2.lib \
+	$(TARGETPATH)\*\winverbs.lib \
+	$(TARGETPATH)\*\libibverbs.lib \
+	$(TARGETPATH)\*\librdmacm.lib
+!else
+	$(TARGETPATH)\*\dat2d.lib \
+	$(TARGETPATH)\*\winverbsd.lib \
+	$(TARGETPATH)\*\libibverbsd.lib \
+	$(TARGETPATH)\*\librdmacmd.lib
+!endif
+
+MSC_WARNING_LEVEL = /W1 /wd4113

@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
+
+Change-Id: Iba890ea8137ac20d9d663b25dfaeabde6abbde0b
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
+@@ -502,9 +502,11 @@ void mlx5e_rx_res_channels_activate(stru
+ 	nch = mlx5e_channels_get_num(chs);
+ 
+ 	for (ix = 0; ix < chs->num; ix++) {
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 		if (mlx5e_channels_is_xsk(chs, ix))
+ 			mlx5e_channels_get_xsk_rqn(chs, ix, &res->rss_rqns[ix]);
+ 		else
++#endif
+ 			mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix]);
+ 	}
+ 	res->rss_nch = chs->num;
+@@ -552,9 +554,11 @@ void mlx5e_rx_res_channels_deactivate(st
+ void mlx5e_rx_res_xsk_update(struct mlx5e_rx_res *res, struct mlx5e_channels *chs,
+ 			     unsigned int ix, bool xsk)
+ {
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk)
+ 		mlx5e_channels_get_xsk_rqn(chs, ix, &res->rss_rqns[ix]);
+ 	else
++#endif
+ 		mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix]);
+ 
+ 	mlx5e_rx_res_rss_enable(res);

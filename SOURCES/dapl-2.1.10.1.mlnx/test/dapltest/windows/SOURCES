@@ -1,0 +1,33 @@
+!if $(FREEBUILD)
+TARGETNAME = dapl2test
+!else
+TARGETNAME = dapl2testd
+!endif
+
+TARGETPATH = ..\..\..\..\..\bin\user\obj$(BUILD_ALT_DIR)
+TARGETTYPE = PROGRAM
+UMTYPE = console
+USE_MSVCRT = 1
+
+SOURCES = \
+	dapltest.rc		\
+	..\dt_cmd.c		\
+	..\dt_test.c	\
+	..\dt_common.c	\
+	..\dt_udapl.c	\
+	..\dt_mdep.c
+
+INCLUDES=..\include;..\mdep\windows;..\..\..\dat\include;%DDK_INC_PATH%
+
+RCOPTIONS=/I..\..\..\..\..\inc;
+
+!if $(FREEBUILD)
+DATLIB = dat2.lib
+!else
+DATLIB = dat2d.lib
+!endif
+
+TARGETLIBS = $(TARGETPATH)\*\$(DATLIB) $(SDK_LIB_PATH)\ws2_32.lib
+
+# XXX do this ASAP - MSC_WARNING_LEVEL= /W3
+MSC_WARNING_LEVEL= /W1

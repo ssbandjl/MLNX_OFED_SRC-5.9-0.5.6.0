@@ -1,0 +1,5 @@
+#include "common/dapl_endian.c"
+#include "common/dapl_global.c"
+#include "common/dapl_performance_cmd_util.c"
+#include "common/dapl_quit_cmd_util.c"
+#include "common/dapl_transaction_cmd_util.c"

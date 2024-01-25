@@ -1,0 +1,34 @@
+Source: knem
+Section: kernel
+Priority: optional
+Maintainer: Brice Goglin <Brice.Goglin@inria.fr>
+Build-Depends: debhelper (>= 9.0.0), dh-autoreconf, bzip2, dkms, pkg-config
+Standards-Version: 4.0
+Homepage: http://runtime.bordeaux.inria.fr/knem/
+
+Package: knem
+Architecture: any
+Depends: pkg-config, ${misc:Depends}
+Description: userspace tools for the KNEM kernel module
+ KNEM is a Linux kernel module enabling high-performance intra-node MPI
+ communication for large messages. KNEM offers support for asynchronous
+ and vectorial data transfers as well as offloading memory copies on to
+ Intel I/OAT hardware. See http://runtime.bordeaux.inria.fr/knem/ for
+ details.
+ .
+ This package provides the userspace tools required to use the knem kernel
+ modules.
+
+Package: knem-dkms
+Section: kernel
+Architecture: all
+Depends: dkms, make, pkg-config, ${misc:Depends}, libc6-dev, gcc
+Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers,
+ knem
+Description: DKMS support for mlnx-ofed kernel modules
+ This package provides integration with the DKMS infrastructure for
+ automatically building out of tree kernel modules.
+ .
+ This package provides the source code for the mlnx-ofed kernel modules.
+ .
+ This package contains the source to be built with dkms.

@@ -1,0 +1,92 @@
+.TH MLXDEVM\-DEV 8 "28 Feb 2021" "iproute2" "Linux"
+.SH NAME
+mlxdevm-dev \- mlxdevm device configuration
+.SH SYNOPSIS
+.sp
+.ad l
+.in +8
+.ti -8
+.B mlxdevm
+.RI "[ " OPTIONS " ]"
+.B dev
+.RI  " { " COMMAND " | "
+.BR help " }"
+.sp
+
+.ti -8
+.IR OPTIONS " := { "
+\fB\-V\fR[\fIersion\fR] |
+\fB\-n\fR[\fIno-nice-names\fR] }
+
+.ti -8
+.B mlxdevm dev show
+.RI "[ " DEV " ]"
+
+.ti -8
+.B mlxdevm dev help
+
+.ti -8
+.B mlxdevm dev param set
+.I DEV
+.B name
+.I PARAMETER
+.B value
+.I VALUE
+.BR cmode " { " runtime " } "
+
+.ti -8
+.B mlxdevm dev param show
+[
+.I DEV
+.B name
+.I PARAMETER
+]
+
+.SH "DESCRIPTION"
+.SS mlxdevm dev show - display mlxdevm device attributes
+
+.PP
+.I "DEV"
+- specifies the mlxdevm device to show.
+If this argument is omitted all devices are listed.
+
+.SS mlxdevm dev param set  - set new value to mlxdevm device configuration parameter
+
+.TP
+.BI name " PARAMETER"
+Specify parameter name to set.
+
+.TP
+.BI value " VALUE"
+New value to set.
+
+.TP
+.BR cmode " { " runtime " } "
+Configuration mode in which the new value is set.
+
+.I runtime
+- Set new value while driver is running. This configuration mode doesn't require any reset to apply the new value.
+
+.SS mlxdevm dev param show - display mlxdevm device supported configuration parameters attributes
+
+.B name
+.I PARAMETER
+Specify parameter name to show.
+If this argument is omitted all parameters supported by mlxdevm devices are listed.
+
+.SH "EXAMPLES"
+.PP
+mlxdevm dev show
+.RS 4
+Shows the state of all mlxdevm devices on the system.
+.RE
+.PP
+mlxdevm dev show pci/0000:01:00.0
+.RS 4
+Shows the state of specified mlxdevm device.
+.RE
+
+.SH SEE ALSO
+.BR mlxdevm (8)
+.BR mlxdevm-port (8)
+.br

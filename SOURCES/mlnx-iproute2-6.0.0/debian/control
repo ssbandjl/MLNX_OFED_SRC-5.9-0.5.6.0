@@ -1,0 +1,20 @@
+Source: mlnx-iproute2
+Section: net
+Priority: optional
+Standards-Version: 4.5.0
+Build-Depends: debhelper,
+ libmnl-dev,
+ flex,
+ bison,
+ pkg-config,
+Maintainer: Ben Hutchings <bwh@kernel.org>
+Uploaders:
+ Vladimir Sokolovsky <vlad@mellanox.com>,
+Homepage: https://ftp.kernel.org/pub/software/network/iproute2
+
+Package: mlnx-iproute2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: This utility allows querying and changing settings such as speed,
+ port, auto-negotiation, PCI locations and checksum offload on many
+ network devices, especially Ethernet devices.

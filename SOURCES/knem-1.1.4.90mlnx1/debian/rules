@@ -1,0 +1,101 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+#
+# This version is for a hypothetical package that can build a kernel modules
+# architecture-dependant package via make-kpkg, as well as an
+# architecture-independent module source package, and other packages
+# either dep/indep for things like common files or userspace components
+# needed for the kernel modules.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+WITH_DKMS ?= 1
+MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
+NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
+
+pname:=knem
+ifeq ($(WITH_DKMS),1)
+pdkms:=$(pname)-dkms
+else
+pdkms:=$(pname)-modules
+pknem:=$(pname)
+endif
+
+pversion := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
+prel := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-\(.\+\)/\2/p')
+
+DIST_NAME := $(shell lsb_release -si)
+DIST_RELEASE := $(DIST_NAME)/$(shell lsb_release -sc)
+
+kernelver ?= $(shell uname -r)
+kernelver1 = $(shell echo $(kernelver) | sed -e 's/_/-/g')
+kernel_source_dir ?= "/lib/modules/$(kernelver)/build"
+kernel_source_dir_soruce ?= "/lib/modules/$(kernelver)/source"
+
+export KSRC := $(kernel_source_dir)
+export KVERSION := $(kernelver)
+export INSTALL_MOD_DIR := updates
+export INSTALL_MOD_PATH := $(CURDIR)/debian/$(pdkms)
+export MODULE_DESTDIR := /lib/modules/$(kernelver)/$(INSTALL_MOD_DIR)
+DESTDIR := $(CURDIR)/debian/tmp
+UDEV_DESTDIR = /etc/udev/rules.d
+
+%:
+ifeq ($(WITH_DKMS),1)
+	dh $@ --with dkms,autoreconf
+else
+	dh $@ --with autoreconf
+endif
+
+override_dh_auto_configure:
+	@echo Building for $(kernelver)
+	find . -type f -exec touch -t 200012201010 '{}' \; || true
+ifeq ($(WITH_DKMS),1)
+	$(CURDIR)/configure --with-linux-release=$(kernelver) --prefix=/opt/$(pname)-$(pversion)
+else
+	if [ -e "$(kernel_source_dir_soruce)" ]; then \
+		$(CURDIR)/configure --with-linux-release=$(kernelver) --with-linux=$(kernel_source_dir_soruce) --with-linux-build=$(kernel_source_dir) --prefix=/opt/$(pname)-$(pversion); \
+	else \
+		$(CURDIR)/configure --with-linux-release=$(kernelver) --with-linux=$(kernel_source_dir) --with-linux-build=$(kernel_source_dir) --prefix=/opt/$(pname)-$(pversion); \
+	fi
+endif
+
+override_dh_auto_build:
+	make -j$(NJOBS)
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	mkdir -p debian/tmp/etc/udev/rules.d
+	mkdir -p debian/tmp/usr/lib
+	make install DESTDIR=$(DESTDIR) KERNELRELEASE=$(kernelver)
+	DESTDIR=$(DESTDIR) KVERSION=$(kernelver) $(DESTDIR)/opt/$(pname)-$(pversion)/sbin/knem_local_install
+	mv debian/tmp/opt/$(pname)-$(pversion)/lib/pkgconfig debian/tmp/usr/lib/
+ifeq ($(WITH_DKMS),1)
+	rm -rf debian/tmp/lib debian/tmp/opt/*/lib/modules
+	make dist
+	mkdir -p debian/tmp/usr/src/$(pname)-$(pversion)
+	tar xf $(pname)-$(pversion).tar.gz -C debian/tmp/usr/src
+endif
+
+override_dh_installinit:
+
+
+ifneq ($(WITH_DKMS),1)
+override_dh_gencontrol:
+	dh_gencontrol -- -v$(pversion)-$(prel).kver.$(kernelver1)
+endif
+
+ifneq ($(MLNX_KO_NO_STRIP),1)
+ifneq ($(WITH_DKMS),1)
+override_dh_strip:
+	dh_strip
+	find debian -name '*.ko' | xargs strip -g
+endif
+endif

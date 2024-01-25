@@ -1,0 +1,414 @@
+.TH MLXDEVM\-PORT 8 "11 Mar 2021" "iproute2" "Linux"
+.SH NAME
+mlxdevm-port \- mlxdevm port configuration
+.SH SYNOPSIS
+.sp
+.ad l
+.in +8
+.ti -8
+.B mlxdevm
+.RI "[ " OPTIONS " ]"
+.B port
+.RI  " { " COMMAND " | "
+.BR help " }"
+.sp
+
+.ti -8
+.IR OPTIONS " := { "
+\fB\-V\fR[\fIersion\fR] |
+\fB\-n\fR[\fIno-nice-names\fR] }
+
+.ti -8
+.B mlxdevm port show
+.RI "[ " DEV/PORT_INDEX " ]"
+
+.ti -8
+.BI "mlxdevm port add"
+.RB "["
+.IR "DEV | DEV/PORT_INDEX"
+.RB "] "
+.RB "[ " flavour
+.IR FLAVOUR " ]"
+.RB "[ " pcipf
+.IR PFNUMBER " ]"
+.RB "{ " pcisf
+.IR SFNUMBER " }"
+.RB "{ " controller
+.IR CNUM " }"
+.br
+
+.ti -8
+.B mlxdevm port del
+.IR DEV/PORT_INDEX
+
+.ti -8
+.BR "mlxdevm port function set "
+.IR DEV/PORT_INDEX
+.RI "{ "
+.BR "hw_addr "
+.RI "ADDR }"
+.RI "{ "
+.BR "state"
+.RI "STATE }"
+
+.ti -8
+.BR "mlxdevm port function cap set "
+.IR DEV/PORT_INDEX
+.RI "{ "
+.BR "roce "
+.RI "TRUE/FALSE }"
+.RI "{ "
+.BR "max_uc_macs "
+.RI "VAL }"
+.ti -4
+This command may change in the future
+
+.ti -8
+.BR "mlxdevm port function rate add "
+.IR DEV/GROUP_NAME
+.ti -4
+This command may change in the future
+
+.ti -8
+.BR "mlxdevm port function rate del "
+.IR DEV/GROUP_NAME
+.ti -4
+This command may change in the future
+
+.ti -8
+.BR "mlxdevm port function rate set "
+.RB "["
+.IR "DEV/GROUP_NAME | DEV/PORT_INDEX"
+.RB "] "
+.RI "{ "
+.BR "tx_max "
+.RI "TX_MAX }"
+.RI "{ "
+.BR "tx_share "
+.RI "TX_SHARE }"
+.ti -4
+This command may change in the future
+
+.ti -8
+.BR "mlxdevm port function rate set "
+.IR "DEV/PORT_INDEX"
+.RI "{ "
+.BR "parent "
+.RI "PARENT_GROUP_NAME }"
+.ti -4
+This command may change in the future
+
+.ti -8
+.BR "mlxdevm port function rate set "
+.IR "DEV/PORT_INDEX"
+.RI "{ "
+.BR "noparent "
+.RI "}"
+
+.ti -8
+.BR "mlxdevm port function rate show"
+.RB "["
+.IR "DEV/GROUP_NAME | DEV/PORT_INDEX"
+.RB "] "
+.ti -4
+This command may change in the future
+
+.ti -8
+.B mlxdevm port help
+
+.SH "DESCRIPTION"
+
+.SS mlxdevm port show - display mlxdevm port attributes
+
+.PP
+.I "DEV/PORT_INDEX"
+- specifies the mlxdevm port to show.
+If this argument is omitted all ports are listed.
+
+.ti -8
+.SS mlxdevm port add - add a mlxdevm port
+.PP
+.B "DEV"
+- specifies the mlxdevm device to operate on.
+
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port index to use for the requested new port.
+This is optional. When ommited, driver allocates unique port index.
+
+.TP
+.BR flavour " { " pcipf " | " pcisf " } "
+set port flavour
+
+.I pcipf
+- PCI PF port
+
+.I pcisf
+- PCI SF port
+
+.TP
+.BR pfnum " { " pfnumber " } "
+Specifies PCI pfnumber to use on which a SF device to create
+
+.TP
+.BR sfnum " { " sfnumber " } "
+Specifies sfnumber to assign to the device of the SF.
+This field is optional for those devices which supports auto assignment of the
+SF number.
+
+.TP
+.BR controller " { " controller " } "
+Specifies controller number for which the SF port is created.
+This field is optional. It is used only for those devices which supports
+external controller.
+
+.ti -8
+.SS mlxdevm port function set - Set the port function attribute(s).
+
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to operate on.
+
+.TP
+.BR hw_addr " ADDR"
+- hardware address of the function to set. This is a Ethernet MAC address when
+port type is Ethernet.
+
+.TP
+.BR state " { " active " | " inactive " } "
+- new state of the function to change to.
+
+.ti -8
+.SS mlxdevm port function cap set - Set the port function capabilities attribute(s).
+
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to operate on.
+
+.TP
+.BR roce " { " true " | " false " } "
+- new roce state of the function cap to change to.
+
+.TP
+.BR max_uc_macs " VAL"
+- new maximum number of unicast mac addresses per function to change to.
+
+.ti -8
+.SS mlxdevm port del - delete a mlxdevm port
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to delete.
+
+.SS mlxdevm port function rate add - Add a QoS group.
+
+.PP
+.B "DEV/GROUP_NAME"
+- specifies group name in string format.
+
+.SS mlxdevm port function rate del - Delete a QoS group.
+
+.PP
+.B "DEV/GROUP_NAME"
+- specifies group name in string format.
+
+.ti -8
+.SS mlxdevm port function rate set - Set tx_max and tx_share for QoS group or mlxdevm port.
+.PP
+.B "DEV/GROUP_NAME"
+- specifies the group name to operate on.
+
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to operate on.
+
+.TP
+.BR tx_max " { " TX_MAX " } "
+- tx_max bandwidth in Mbps.
+
+.TP
+.BR tx_share " { " TX_SHARE " } "
+- tx_share bandwidth in Mbps.
+
+.ti -8
+.SS mlxdevm port function rate set - Assign mlxdevm port to a QoS group.
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to operate on.
+
+.TP
+.BR parent " { " PARENT_GROUP_NAME " } "
+- parent group name in string format.
+
+.ti -8
+.SS mlxdevm port function rate set - Ungroup a mlxdevm port.
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to operate on.
+
+.TP
+.BR noparent
+- ungroup the mlxdevm port.
+
+.ti -8
+.SS mlxdevm port function rate show - Display QoS information QoS group or mlxdevm port.
+.PP
+.B "DEV/GROUP_NAME"
+- specifies the group name to display.
+
+.PP
+.B "DEV/PORT_INDEX"
+- specifies the mlxdevm port to display.
+
+.PP
+.B If QoS group name or mlxdevm port is not specified, all QoS groups and mlxdevm ports are displayed.
+
+.SH "EXAMPLES"
+.PP
+mlxdevm port show
+.RS 4
+Shows the state of all mlxdevm ports on the system.
+.RE
+.PP
+mlxdevm port show pci/0000:01:00.0/1
+.RS 4
+Shows the state of specified mlxdevm port.
+.RE
+.PP
+mlxdevm port add pci/0000:06:00.0 flavour pcisf pfnum 0 sfnum 88
+.RS 4
+Add a mlxdevm port of flavour PCI SF on PCI PF having number 0 with SF number 88.
+To make use of the function an example sequence is to add a port, configure the
+function attribute and activate the function. Once function usage is completed,
+inactivate the function and finally delete the port. When there is desire to
+reuse the port without deletion, it can be reconfigured and activated again when
+function is in inactive state and function's operational state is detached.
+.RE
+.PP
+mlxdevm port del pci/0000:06:00.0/1
+.RS 4
+Delete previously created mlxdevm port. It is recommended to first deactivate
+the function if the function supports state management.
+.RE
+.PP
+mlxdevm port function set pci/0000:01:00.0/1 hw_addr 00:00:00:11:22:33
+.RS 4
+Configure hardware address of the PCI function represented by mlxdevm port.
+If the port supports change in function state, hardware address must be configured
+before activating the function.
+.RE
+.PP
+mlxdevm port function set pci/0000:01:00.0/1 state active
+.RS 4
+Activate the function. This will initiate the function enumeration and driver loading.
+.RE
+.PP
+mlxdevm port function set pci/0000:01:00.0/1 state inactive
+.RS 4
+Deactivate the function. This will initiate the function teardown which results
+in driver unload and device removal.
+.RE
+.PP
+mlxdevm port function set pci/0000:01:00.0/1 hw_addr 00:00:00:11:22:33 state active
+.RS 4
+Configure hardware address and also active the function. When a function is
+activated together with other configuration in a single command, all the
+configuration is applied first before changing the state to active.
+.RE
+.PP
+mlxdevm port function cap set pci/0000:01:00.0/1 roce true
+.RS 4
+Set the roce capability to enable.
+.RE
+.PP
+mlxdevm port function cap set pci/0000:01:00.0/1 max_uc_macs 1
+.RS 4
+Set the maximum number of unicast mac addresses to be 1 for this function.
+.RE
+.PP
+mlxdevm port add pci/0000:06:00.0 flavour pcisf pfnum 0 sfnum 88 controller 1
+.RS 4
+Add a mlxdevm port of flavour PCI SF on controller 1 which has PCI PF of number
+0 with SF number 88. To make use of the function an example sequence is to add
+a port, configure the function attribute and activate the function. Once
+the function usage is completed, inactivate the function and finally delete
+the port. When there is desire to reuse the port without deletion, it can be
+reconfigured and activated again when function is in inactive state and
+function's operational state is detached.
+.RE
+
+.PP
+mlxdevm port function rate add pci/0000:03:00.0/12_group
+.RS 4
+Add a new QoS group named "12_group" under device "pci/0000:03:00.0".
+.RE
+
+.PP
+mlxdevm port function rate del pci/0000:03:00.0/12_group
+.RS 4
+Delete a QoS group named "12_group" under device "pci/0000:03:00.0".
+.RE
+
+.PP
+mlxdevm port function rate set pci/0000:03:00.0/12_group tx_max 900
+.RS 4
+Set tx_max 2000Mbps, tx_share 500Mbps for the "12_group" QoS group.
+.RE
+
+.PP
+mlxdevm port function rate set pci/0000:03:00.0/229376 tx_max 2000 tx_share 500
+.RS 4
+Set tx_max 2000Mbps, tx_share 500Mbps for this function.
+.RE
+
+.PP
+mlxdevm port function rate set pci/0000:03:00.0/229376 parent 12_group
+.RS 4
+Assign this function to the QoS group "12_group".
+.RE
+
+.PP
+mlxdevm port function rate set pci/0000:03:00.0/229376 noparent
+.RS 4
+Ungroup this function.
+.RE
+
+.PP
+mlxdevm port function rate show
+.RS 4
+Display the QoS info of all QoS groups and mlxdevm ports on the system.
+
+Output:
+.RS
+pci/0000:03:00.0/12_group type node tx_max 1000 tx_share 200
+.RE
+.RS
+pci/0000:03:00.0/229376 type leaf tx_max 2000 tx_share 500 parent 12_group
+.RE
+.RE
+
+.PP
+mlxdevm port function rate show pci/0000:03:00.0/12_group
+.RS
+Display QoS info of 12_group.
+
+Output:
+.RS 4
+pci/0000:03:00.0/12_group type node tx_max 1000 tx_share 200
+.RE
+.RE
+
+.PP
+mlxdevm port function rate show pci/0000:03:00.0/229376
+.RS
+Display QoS info of this mlxdevm port.
+
+Output:
+.RS 4
+pci/0000:03:00.0/229376 type leaf tx_max 2000 tx_share 500 parent 12_group
+.RE
+.RE
+
+.SH SEE ALSO
+.BR mlxdevm (8),
+.BR mlxdevm-dev (8),
+.br

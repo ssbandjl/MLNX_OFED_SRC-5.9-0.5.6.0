@@ -1,0 +1,240 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+ "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+<!--
+ Copyright © inria 2009-2010
+ Brice Goglin <Brice.Goglin@inria.fr>
+
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ 3. The name of the author may not be used to endorse or promote products
+    derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+ <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+ <title>KNEM: Fast Intra-Node MPI Communication</title>
+ <link rel="stylesheet" type="text/css" href="../style.css" />
+</head>
+
+<body>
+
+<h1><a href="..">KNEM</a></h1>
+<h1 class="sub">Documentation</h1>
+
+
+
+<hr class="main" />
+
+<p><em>
+ See also the <a href="knem-api.html">interface documentation</a> for details
+ on how to use KNEM within your applications or MPI implementations.
+</em></p>
+
+<hr class="main" />
+
+
+
+<div class="section">
+<h3>Installing KNEM</h3>
+<p>
+ KNEM configures, builds and installs as usual.
+</p>
+<pre>
+ $ ./configure --prefix=/opt/knem
+ $ make
+ $ make install
+</pre>
+<p>
+ If building from a GIT glone, you may need to install automake >=1.10
+ and autoconf >=2.61, and then prepare the script before configure:
+</p>
+<pre>
+ $ ./autogen.sh
+</pre>
+<p>
+ Everything is installed in the prefix directory (<tt>/opt/knem</tt>
+ by default), including the kernel module and udev rules file.
+ If you want modprobe and udev to properly handle KNEM, the relevant
+ files should be installed in <tt>/lib/modules</tt> and
+ <tt>/etc/udev/rules.d</tt> instead. To do so:
+</p>
+<pre>
+ $ /path/to/knem/install/sbin/knem_local_install
+</pre>
+<p>
+ Usually, <tt>make install</tt> will run only once per cluster and
+ install in a shared directory, while <tt>knem_local_install</tt>
+ will run once per machine since <tt>/lib/modules</tt> and
+ <tt>/etc/udev/rules.d</tt> are not shared between machines.
+</p>
+<p>
+ If you ever want to uninstall KNEM, you may run:
+</p>
+<pre>
+ $ rmmod knem
+ $ /path/to/knem/install/sbin/knem_local_install --uninstall
+ $ make uninstall
+</pre>
+<p>
+ It is also possible to build KNEM as a RPM package which bundles
+ the result of both <tt>make install</tt> and <tt>knem_local_install</tt>:
+</p>
+<pre>
+ $ rpmbuild -tb knem-&lt;version&gt;.tar.gz
+</pre>
+<p>
+ KNEM also supports DKMS (Dynamic Kernel Module Support) which lets
+ the system automatically rebuild and install modules for new kernels.
+ See <tt>dkms.conf</tt> for details.
+</p>
+</div>
+
+
+
+<div class="section">
+<h3>Starting KNEM</h3>
+<p>
+ To start KNEM, assuming you ran <tt>knem_local_install</tt>, just run:
+</p>
+<pre>
+ $ modprobe knem
+</pre>
+<p>
+ By default, udev will set the <tt>/dev/knem</tt> device group to <em>rdma</em>.
+ Thus any KNEM user should be added to this group first.
+</p>
+<p>
+ If you did not run <tt>knem_local_install</tt>, you may still load
+ the kernel module and setup the device group manually:
+</p>
+<pre>
+ $ insmod /path/to/knem/install/lib/modules/$(uname -r)/knem.ko
+ $ chgrp rdma /dev/knem
+</pre>
+<p>
+ If the <em>rdma</em> group does not exist on your machine, you may
+ modify the udev rule to set the mode to <tt>0666</tt> and not to
+ change the file group.
+</p>
+</div>
+
+
+
+<div class="section">
+<h3>Configuring your MPI implementation to use KNEM</h3>
+<p>
+ MPICH2 supports KNEM since version 1.1.1 (it is therefore also supported by MVAPICH2 1.5).
+ To use it, you should add the following options to the configure line:
+</p>
+<pre>
+ --with-nemesis-local-lmt=dma --with-knem=/path/to/knem/install/
+</pre>
+<p>
+ It will use KNEM starting at 64kB messages, and offload copies to DMA engine after 2MB.
+ To change the latter threshold, use the environment variable <tt>MPICH_NEM_LMT_DMA_THRESHOLD</tt>.
+</p>
+<br />
+<p>
+ Open MPI supports KNEM since version 1.5.0.
+ To use it, you should add the following option to the configure line:
+</p>
+<pre>
+ --with-knem=/path/to/knem/install/
+</pre>
+<p>
+ KNEM will be used at runtime after 4kB.
+ You may change this threshold with <tt>--mca btl_sm_eager_limit 32768</tt>.
+ You may also disable KNEM entirely at runtime with <tt>--mca btl_sm_use_knem 0</tt>.
+ KNEM will not offload copies to DMA engine by default.
+ You should use <tt>--mca btl_sm_knem_dma_min 1048576</tt> to enable copy offload starting at 1MB.
+</p>
+<br />
+<p>
+ To check that KNEM is properly used, see <a href="#stats">Getting Statistics</a>.
+ Make sure your users are members of the <em>rdma</em> group so that they are
+ granted access to the <tt>/dev/knem</tt> device file.
+</p>
+<p>
+ If you want to port your MPI implementation to KNEM,
+ see the <a href="knem-api.html">interface documentation</a>.
+</p>
+</div>
+
+
+
+<div class="section" id="stats">
+<h3>Getting Statistics</h3>
+<p>
+ To check that KNEM is properly used, how it processed requests, why some of
+ them failed, you may read statistics:
+</p>
+<pre>
+  $ cat /dev/knem
+  [...]
+   Requests submitted                           : 10243
+   Requests processed (total)                   : 10236
+            processed (using DMA)               : 0
+            processed (offloaded to thread)     : 0
+  [...]
+   Requests rejected (invalid flags)            : 5
+            rejected (not enough memory)        : 2
+  [...]
+   Requests failed during memcpy from/to user   : 1
+            failed during DMA copy              : 0
+</pre>
+<p>
+ These statistics may also be cleared by a privileged user:
+</p>
+<pre>
+  # echo 1 > /dev/knem
+</pre>
+<p>
+ If the knem module was loaded with parameter <tt>statsverbose=1</tt>
+ (appended to the <tt>insmod</tt> or <tt>modprobe</tt> command-line),
+ reading from <tt>/dev/knem</tt> will also list the currently open
+ memory regions for the current process
+ (and even from all processes if the user is privileged).
+</p>
+<pre>
+  # cat /dev/knem
+  [...]
+   Context 5d343d48
+    Region 5d344ad1 SingleUse
+    Listed 1 regions
+   Context 5d343d49
+    Listed 0 regions
+   Listed 8 contexts
+</pre>
+</div>
+
+
+
+<hr class="main" />
+
+
+
+<p class="updated">
+ Last updated on 2011/07/12.
+</p>
+
+</body>
+</html>

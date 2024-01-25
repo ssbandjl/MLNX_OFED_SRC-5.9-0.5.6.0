@@ -1,0 +1,875 @@
+		DAPL Event Subsystem Design v. 0.96
+                -----------------------------------
+
+=================
+Table of Contents
+=================
+
+* Table of Contents
+* Referenced Documents
+* Goals
+	+ Initial Goals
+	+ Later Goals
+* Requirements, constraints, and design inputs
+	+ DAT Specification Constraints
+		+ Object and routine functionality, in outline
+		+ Detailed object and routine specification
+		+ Synchronization
+	+ IBM Access API constraints
+		+ Nature of DAPL Event Streams in IBM Access API.
+		+ Nature of access to CQs
+	+ Operating System (Pthread) Constraints
+	+ Performance model
+		+ A note on context switches
+* DAPL Event Subsystem Design
+	+ OS Proxy Wait Object
+		+ Definition
+		+ Suggested Usage
+	+ Event Storage
+	+ Synchronization
+		+ EVD Synchronization: Locking vs. Producer/Consumer queues
+		+ EVD Synchronization: Waiter vs. Callback
+		+ CNO Synchronization
+		+ Inter-Object Synchronization
+		+ CQ -> CQEH Assignments
+	+ CQ Callbacks
+   	+ Dynamic Resizing of EVDs
+	+ Structure and pseudo-code
+		+ EVD
+		+ CNO
+* Future directions
+	+ Performance improvements: Reducing context switches
+	+ Performance improvements: Reducing copying of event data
+	+ Performance improvements: Reducing locking
+	+ Performance improvements: Reducing atomic operations
+	+ Performance improvements: Incrementing concurrency.
+
+====================
+Referenced Documents
+====================
+
+uDAPL: User Direct Access Programming Library, Version 1.0.  Published
+6/21/2002.  http://www.datcollaborative.org/uDAPL_062102.pdf.
+Referred to in this document as the "DAT Specification".
+
+InfiniBand Access Application Programming Interface Specification,
+Version 1.2, 4/15/2002.  In DAPL SourceForge repository at
+doc/api/access_api.pdf.  Referred to in this document as the "IBM
+Access API Specification".
+
+=====
+Goals
+=====
+
+Initial goals
+-------------
+-- Implement the dat_evd_* calls described in the DAT Specification (except
+   for dat_evd_resize).
+
+-- The implementation should be as portable as possible, to facilitate
+   HCA Vendors efforts to implement vendor-specific versions of DAPL.
+
+Later goals
+-----------
+-- Examine various possible performance optimizations.  This document
+   lists potential performance improvements, but the specific
+   performance improvements implemented should be guided by customer
+   requirements.
+
+-- Implement the dat_cno_* calls described in the DAT 1.0 spec
+
+-- Implement OS Proxy Wait Objects.
+
+-- Implement dat_evd_resize
+
+Non-goals
+---------
+-- Thread safe implementation
+
+============================================
+Requirements, constraints, and design inputs
+============================================
+
+DAT Specification Constraints
+-----------------------------
+
+-- Object and routine functionality, in outline
+
+The following section summarizes the requirements of the DAT
+Specification in a form that is simpler to follow for purposes of
+implementation.  This section presumes the reader has read the DAT
+Specification with regard to events.
+
+Events are delivered to DAPL through Event Streams.  Each Event Stream
+targets a specific Event Descriptor (EVD); multiple Event Streams may
+target the same EVD.  The Event Stream<->EVD association is
+effectively static; it may not be changed after the time at which
+events start being delivered.  The DAT Consumer always retrieves
+events from EVDs.  EVDs are intended to be 1-to-1 associated with the
+"native" event convergence object on the underlying transport.  For
+InfiniBand, this would imply a 1-to-1 association between EVDs and
+CQs.
+
+EVDs may optionally have an associated Consumer Notification Object
+(CNO).  Multiple EVDs may target the same CNO, and the EVD<->CNO
+association may be dynamically altered.  The DAT Consumer may wait for
+events on either EVDs or CNOs; if there is no waiter on an EVD and it
+is enabled, its associated CNO is triggered on event arrival.  An EVD
+may have only a single waiter; a CNO may have multiple waiters.
+Triggering of a CNO is "sticky"; if there is no waiter on a CNO when
+it is triggered, the next CNO waiter will return immediately.
+
+CNOs may have an associated OS Proxy Wait Object, which is signaled
+when the CNO is triggered.
+
+-- Detailed object and routine specification
+
+Individual events may be "signaling" or "non-signaling", depending
+on the interaction of:
+	* Receive completion endpoint attributes
+	* Request completion endpoint attributes
+	* dat_ep_post_send completion flags
+	* dat_ep_post_recv completion flags
+The nature of this interaction is outside the scope of this document;
+see the DAT Specification 1.0 (or, failing that, clarifications in a
+later version of the DAT Specification).
+
+A call to dat_evd_dequeue returns successfully if there are events on
+the EVD to dequeue.  A call to dat_evd_wait blocks if there are fewer
+events present on the EVD than the value of the "threshold" parameter
+passed in the call.  Such a call to dat_evd_wait will be awoken by the
+first signaling event arriving on the EVD that raises the EVD's event
+count to >= the threshold value specified by dat_evd_wait().
+
+If a signaling event arrives on an EVD that does not have a waiter,
+and that EVD is enabled, the CNO associated with the EVD will be
+triggered.
+
+A CNO has some number of associated waiters, and an optional
+associated OS Proxy Wait Object.  When a CNO is triggered, two things
+happen independently:
+	* The OS Proxy Wait Object associated with the CNO, if any, is
+	  signaled, given the handle of an EVD associated with the CNO
+	  that has an event on it, and disassociated from the CNO.
+	* If:
+		* there is one or more waiters associated with the
+	  	  CNO, one of the waiters is unblocked and given the
+	  	  handle of an EVD associated with the CNO that has an
+	  	  event on it.
+		* there are no waiters associated with the CNO, the
+	  	  CNO is placed in the triggered state.
+
+When a thread waits on a CNO, if:
+	* The CNO is in the untriggered state, the waiter goes to
+  	  sleep pending the CNO being triggered.
+	* The CNO is in the triggered state, the waiter returns
+	  immediately with the handle of an EVD associated with the
+	  CNO that has an event on it, and the CNO is moved to the
+	  untriggered state.
+
+Note specifically that the signaling of the OS Proxy Wait Object is
+independent of the CNO moving into the triggered state or not; it
+occurs based on the state transition from Not-Triggered to Triggered.
+Signaling the OS Proxy Wait Object only occurs when a CNO is
+triggered.  In contrast, waiters on a CNO are unblocked whenever the
+CNO is in the triggered *state*, and that state is sticky.
+
+Note also that which EVD is returned to the caller in a CNO wait is
+not specified; it may be any EVD associated with the CNO on which an
+event arrival might have triggered the CNO.  This includes the
+possibility that the EVD returned to the caller may not have any
+events on it, if the dat_cno_wait() caller raced with a separate
+thread doing a dat_evd_dequeue().
+
+The DAT Specification is silent as to what behavior is to be expected
+from an EVD after an overflow error has occurred on it.  Thus this
+design will also be silent on that issue.
+
+The DAT Specification has minimal requirements on inter-Event Stream
+ordering of events.  Specifically, any connection events must precede
+(in consumption order) any DTO Events for the same endpoint.
+Similarly, any successful disconnection events must follow any DTO
+Events for an endpoint.
+
+-- Synchronization
+
+Our initial implementation is not thread safe.  This means that we do
+not need to protect against the possibility of multiple simultaneous
+user calls occurring on the same object (EVD, CNO, EP, etc.); that is
+the responsibility of the DAT Consumer.
+
+However, there are synchronization guards that we do need to protect
+against because the DAT Consumer cannot. Specifically, since the user
+cannot control the timing of callbacks from the IBM Access API
+Implementation, we need to protect against possible collisions between
+user calls and such callbacks.  We also need to make sure that such
+callbacks do not conflict with one another in some fashion, possibly
+by assuring that they are single-threaded.
+
+In addition, for the sake of simplicity in the user interface, I have
+defined "not thread safe" as "It is the DAT Consumer's responsibility
+to make sure that all calls against an individual object do not
+conflict".  This does, however, suggest that the DAPL library needs to
+protect against calls to different objects that may result in
+collisions "under the covers" (e.g. a call on an EVD vs. a call on its
+associated CNO).
+
+So our synchronization requirements for this implementation are:
+	+ Protection against collisions between user calls and IBM
+	  Access API callbacks.
+	+ Avoidance of or protection against collisions between
+   	  different IBM Access API callbacks.
+	+ Protection against collisions between user calls targeted at
+   	  different DAT objects.
+
+IBM Access API constraints
+--------------------------
+
+-- Nature of DAPL Event Streams in IBM Access API
+
+DAPL Event Streams are delivered through the IBM Access API in two fashions:
+	+ Delivery of a completion to a CQ.
+	+ A callback is made directly to a previously registered DAPL
+   	  function with parameters describing the event.
+(Software events are not delivered through the IBM Access API).
+
+The delivery of a completion to a CQ may spark a call to a previously
+registered callback depending on the attributes of the CQ and the
+reason for the completion.  Event Streams that fall into this class
+are:
+	+ Send data transport operation
+	+ Receive data transport operation
+	+ RMR bind
+
+The Event Streams that are delivered directly through a IBM Access API
+callback include:
+	+ Connection request arrival
+	+ Connection resolution (establishment or rejection)
+	+ Disconnection
+	+ Asynchronous errors
+
+Callbacks associated with CQs are further structured by a member of a
+particular CQ Event Handling (CQEH) domain (specified at CQ creation
+time).  All CQ callbacks within a CQEH domain are serviced by the same
+thread, and hence will not collide.
+
+In addition, all connection-related callbacks are serviced by the same
+thread, and will not collide.  Similarly, all asynchronous error
+callbacks are serviced by the same thread, and will not collide.
+Collisions between any pair of a CQEH domain, a connection callback,
+and an asynchronous error callback are possible.
+
+-- Nature of access to CQs
+
+The only probe operation the IBM Access API allows on CQs is
+dequeuing.  The only notification operation the IBM Access API
+supports for CQs is calling a previously registered callback.
+
+Specifically, the IB Consumer may not query the number of completions
+on the CQ; the only way to find out the number of completions on a CQ
+is through dequeuing them all.  It is not possible to block waiting
+on a CQ for the next completion to arrive, with or without a
+threshold parameter.
+
+Operating System Constraints
+----------------------------
+
+The initial platform for implementation of DAPL is RedHat Linux 7.2 on
+Intel hardware.  On this platform, inter-thread synchronization is
+provided by a POSIX Pthreads implementation.  From the viewpoint of
+DAPL, the details of the Pthreads interface are platform specific.
+However, Pthreads is a very widely used threading library, common on
+almost all Unix variants (though not used on the different variations
+of Microsoft Windows(tm)).  In addition, RedHat Linux 7.2 provides
+POSIX thread semaphore operations (e.g. see sem_init(3)), which are
+not normally considered part of pthreads.
+
+Microsoft Windows(tm) provides many synchronization primitives,
+including mutual exclusion locks, and semaphores.
+
+DAPL defines an internal API (not exposed to the consumer), though
+which it accesses Operating Systems Dependent services; this is called
+the OSD API.  It is intended that this layer contain all operating
+system dependencies, and that porting DAPL to a new operating system
+should only require changes to this layer.
+
+We have chosen to define the synchronization interfaces established at
+this layer in terms of two specific objects: mutexes and sempahores w/
+timeout on waiting.  Mutexes provide mutual exclusion in a way that is
+common to all known operating systems.  The functionality of
+semaphores also exists on most known operating systems, though the
+sempahores provided by POSIX do not provide timeout capabilities.
+This is for three reasons.  First, in contrast to Condition Variables
+(the native pthreads waiting/signalling object), operations on
+sempahores do not require use of other synchronization variables
+(i.e. mutexes).  Second, it is fairly easy to emulate sempahores using
+condition variables, and it is not simple to emulate condition
+variables using semaphores.  And third, there are some anticipated
+platforms for DAPL that implement condition variables in relation to
+some types of locks but not others, and hence constrain appropriate
+implementation choices for a potential DAPL interface modeled after
+condition variables.
+
+Implementation of the DAPL OS Wait Objects will initially be based on
+condition variables (requiring the use of an internal lock) since
+POSIX semaphores do not provide a needed timeout capability.  However,
+if improved performance is required, a helper thread could be created
+that arranges to signal waiting semaphores when timeouts have
+expired.  This is a potential future (or vendor) optimization.
+
+Performance Model
+-----------------
+One constraint on the DAPL Event Subsystem implementation is that it
+should perform as well as possible.  We define "as well as possible"
+by listing the characteristics of this subsystem that will affect its
+performance most strongly.  In approximate order of importance, these
+are:
+	+ The number of context switches on critical path
+	+ The amount of copying on the critical path.
+	+ The base cost of locking (assuming no contention) on the
+	  critical path.  This is proportional to the number of locks
+	  taken.
+	+ The amount of locking contention expected.  We make a
+	  simplifying assumption and take this as the number of cycles
+	  for which we expect to hold locks on the critical path.
+	+ The number of "atomic" bus operations executed (these take
+   	  more cycles than normal operations, as they require locking
+   	  the bus).
+
+We obviously wish to minimize all of these costs.
+
+-- A note on context switches
+
+In general, it's difficult to minimize context switches in a user
+space library directly communicating with a hardware board.  This is
+because context switches, by their nature, have to go through the
+operating system, but the information about which thread to wake up
+and whether to wake it up is generally in user space.  In addition,
+the IBM Access API delivers all Event Streams as callbacks in user
+context (as opposed to, for example, allowing a thread to block within
+the API waiting for a wakeup).  For this reason, the default sequence
+of events for a wakeup generated from the hardware is:
+	* Hardware interrupts the main processor.
+	* Interrupt thread schedules a user-level IBM Access API
+	  provider service thread parked in the kernel.
+	* Provider service thread wakes up the sleeping user-level
+	  event DAT implementation thread.
+This implies that any wakeup will involve three context switches.
+This could be reduced by one if there were a way for user threads to
+block in the kernel, we might skip the user-level provider thread.
+
+===========================
+DAPL Event Subsystem Design
+===========================
+
+
+OS Proxy Wait Object
+--------------------
+
+The interface and nature of the OS Proxy Wait Object is specified in
+the uDAPL v. 1.0 header files as a DAT_OS_WAIT_PROXY_AGENT via the
+following defines:
+
+typedef void (*DAT_AGENT_FUNC)
+        (
+        DAT_PVOID,      /* instance data   */
+        DAT_EVD_HANDLE  /* Event Dispatcher*/
+        );
+
+typedef struct dat_os_wait_proxy_agent
+        {
+        DAT_PVOID instance_data;
+        DAT_AGENT_FUNC proxy_agent_func;
+        } DAT_OS_WAIT_PROXY_AGENT;
+
+In other words, an OS Proxy Wait Object is a (function, data) pair,
+and signalling the OS Proxy Wait Object is a matter of calling the
+function on the data and an EVD handle associated with the CNO.
+The nature of that function and its associated data is completely up
+to the uDAPL consumer.
+
+Event Storage
+-------------
+
+The data associated with an Event (the type, the EVD, and any type
+specific data required) must be stored between event production and
+event consumption.  If storage is not provided by the underlying
+Verbs, that data must be stored in the EVD itself.  This may require
+an extra copy (one at event production and one at event consumption).
+
+Event Streams associated purely with callbacks (i.e. IB events that
+are not mediated by CQs) or user calls (i.e. software events) don't
+have any storage allocated for them by the underlying verbs and hence
+must store their data in the EVD.
+
+Event Streams that are associated with CQs have the possibility of
+leaving the information associated with the CQ between the time the
+event is produced and the time it is consumed.  However, even in this
+case, if the user calls dat_evd_wait with a threshold argument, the
+events information must be copied to storage in the CQ.  This is
+because it is not possible to determine how many completions there are
+on a CQ without dequeuing them, and that determination must be made by
+the CQ notification callback in order to decide whether to wakeup a
+dat_evd_wait() waiter.  Note that this determination must be made
+dynamically based on the arguments to dat_evd_wait().
+
+Further, leaving events from Event Streams associated with the CQs "in
+the CQs" until event consumption raises issues about in what order
+events should be dequeued if there are multiple event streams entering
+an EVD.  Should the CQ events be dequeued first, or should the events
+stored in the EVD be dequeued first?  In general this is a complex
+question; the uDAPL spec does not put many restrictions on event
+order, but the major one that it does place is to restrict connection
+events associated with a QP to be dequeued before DTOs associated with
+that QP, and disconnection events after.  Unfortunately, if we adopt
+the policy of always dequeueing CQ events first, followed by EVD
+events, this means that in situations where CQ events have been copied
+to the EVD, CQ events may be received on the EVD out of order.
+
+However, leaving events from Event Streams associated with CQs allows
+us to avoid enabling CQ callbacks in cases where there is no waiter
+associated with the EVDs.  This can be a potentially large savings of
+gratuitous context switches.
+
+For the initial implementation, we will leave all event information
+associated with CQs until dequeued by the consumer.  All other event
+information will be put in storage on the EVD itself.  We will always
+dequeue from the EVD first and the CQ second, to handle ordering among
+CQ events in cases in which CQ events have been copied to the EVD.
+
+
+Synchronization
+---------------
+
+-- EVD synchronization: Locking vs. Producer/Consumer queues.
+
+In the current code, two circular producer/consumer queues are used
+for non-CQ event storage (one holds free events, one holds posted
+events).  Event producers "consume" events from the free queue, and
+produce events onto the posted event queue.  Event consumers consume
+events from the posted event queue, and "produce" events onto the free
+queue.  In what follows, we discuss synchronization onto the posted
+event queue, but since the usage of the queues is symmetric, all of
+what we say also applies to the free event queue (just in the reverse
+polarity).
+
+The reason for using these circular queues is to allow synchronization
+between producer and consumer without locking in some situations.
+Unfortunately, a circular queue is only an effective method of
+synchronization if we can guarantee that there are only two accessors
+to it at a given time: one producer, and one consumer.  The model will
+not work if there are multiple producers, or if there are multiple
+consumers (though obviously a subsidiary lock could be used to
+single-thread either the producers or the consumers).
+
+There are several difficulties with guaranteeing the producers and
+consumers will each be single threaded in accessing the EVD:
+	* Constraints of the IB specification and IBM Access API
+	  (differing sources for event streams without guarantees of
+	  IB provider synchronization between them) make it difficult
+	  to avoid multiple producers.
+	* The primitives used for the producer/consumer queue are not
+	  as widely accepted as locks, and may render the design less
+	  portable.
+
+We will take locks when needed when producing events.  The details of
+this plan are described below.
+
+This reasoning is described in more detail below to inform judgments
+about future performance improvements.
+
+* EVD producer synchronization
+
+The producers fall into two classes:
+	* Callbacks announcing IA associated events such as connection
+	  requests, connections, disconnections, DT ops, RMR bind,
+	  etc.
+	* User calls posting a software event onto the EVD.
+
+It is the users responsibility to protect against simultaneous
+postings of software events onto the same EVD.  Similarly, the CQEH
+mechanism provided by the IBM Access API allows us to avoid collisions
+between IBM Access API callbacks associated with CQs.  However, we
+must protect against software events colliding with IBM Access API
+callbacks, and against non-CQ associated IB verb callbacks (connection
+events and asynchronous errors) colliding with CQ associated IBM
+Access API callbacks, or with other non-CQ associated IBM Access API
+callbacks (i.e. a connection callback colliding with an asynchronous
+error callback).
+
+Note that CQ related callbacks do not act as producers on the circular
+list; instead they leave the event information on the CQ until
+dequeue; see "Event Storage" above.  However, there are certain
+situations in which it is necessary for the consumer to determine the
+number of events on the EVD.  The only way that IB provides to do this
+is to dequeue the CQEs from the CQ and count them.  In these
+situations, the consumer will also act as an event producer for the
+EVD event storage, copying all event information from the CQ to the
+EVD.
+
+Based on the above, the only case in which we may do without locking
+on the producer side is when all Event Streams of all of the following
+types may be presumed to be single threaded:
+	* Software events
+	* Non-CQ associated callbacks
+	* Consumer's within dat_evd_wait
+
+We use a lock on the producer side of the EVD whenever we have
+multiple threads of producers.
+
+* EVD Consumer synchronization
+
+It is the consumer's responsibility to avoid multiple callers into
+dat_evd_wait and dat_evd_dequeue.  For this reason, there is no
+requirement for a lock on the consumer side.
+
+* CQ synchronization
+
+We simplify synchronization on the CQ by identifying the CQ consumer
+with the EVD consumer.  In other words, we prohibit any thread other
+than a user thread in dat_evd_wait() or dat_evd_dequeue() from
+dequeueing events from the CQ.  This means that we can rely on the
+uDAPL spec guarantee that only a single thread will be in the
+dat_evd_wait() or dat_evd_dequeue() on a single CQ at a time.  It has
+the negative cost that (because there is no way to probe for the
+number of entries on a CQ without dequeueing) the thread blocked in
+dat_evd_wait() with a threshold argument greater than 1 will be woken
+up on each notification on that CQ, in order to dequeue entries from
+the CQ and determine if the threshold value has been reached.
+
+-- EVD Synchronization: Waiter vs. Callback
+
+Our decision to restrict dequeueing from the IB CQ to the user thread
+(rather than the notification callback thread) means that
+re-requesting notifications must also be done from that thread.  This
+leads to a subtle requirement for synchronization: the request for
+notification (ib_completion_notify) must be atomic with the wait on
+the condition variable by the user thread (atomic in the sense that
+locks must be held to force the signalling from any such notification
+to occur after the sleep on the condition variable).  Otherwise it is
+possible for the notification requested by the ib_completion_notify
+call to occur before the return from that call.  The signal done by
+that notify will be ignored, and no further notifications will be
+enabled, resulting in the thread sleep waiting forever.  The CQE
+associated with the notification might be noticed upon return from the
+notify request, but that CQE might also have been reaped by a previous
+call.
+
+-- CNO Synchronization
+
+In order to protect data items that are changed during CNO signalling
+(OS Proxy Wait Object, EVD associated with triggering, CNO state), it
+is necessary to use locking when triggering and waiting on a CNO.
+
+Note that the synchronization between trigerrer and waiter on CNO must
+take into account the possibility of the waiter returning from the
+wait because of a timeout.  I.e. it must handle the possibility that,
+even though the waiter was detected and the OS Wait Object signalled
+under an atomic lock, there would be no waiter on the OS Wait Object
+when it was signalled.  To handle this case, we make the job of the
+triggerer to be setting the state to triggered and signalling the OS
+Wait Object; all other manipulation is done by the waiter.
+
+-- Inter-Object Synchronization
+
+By the requirements specified above, the DAPL implementation is
+responsible for avoiding collisions between DAT Consumer calls on
+different DAT objects, even in a non-thread safe implementation.
+Luckily, no such collisions exist in this implementation; all exported
+DAPL Event Subsystem calls involve operations only on the objects to
+which they are targeted.  No inter-object synchronization is
+required.
+
+The one exception to this is the posting of a software event on an EVD
+associated with a CNO; this may result in triggering the CNO.
+However, this case was dealt with above in the discussion of
+synchronizing between event producers and consumers; the posting of a
+software event is a DAPL API call, but it's also a event producer.
+
+To avoid lock hierarchy issues between EVDs and CNOs and minimize lock
+contention, we arrange not to hold the EVD lock when triggering the
+CNO.  That is the only context in which we would naturally attempt to
+hold both locks.
+
+-- CQ -> CQEH Assignments
+
+For the initial implementation, we will assign all CQs to the same
+CQEH.  This is for simplicity and efficient use of threading
+resources; we do not want to dedicate a thread per CQ (where the
+number of CQs may grow arbitrarily high), and we have no way of
+knowing which partitioning of CQs is best for the DAPL consumer.
+
+CQ Callbacks
+------------
+
+The responsibility of a CQ callback is to wakeup any waiters
+associated with the CQ--no data needs to be dequeued/delivered, since
+that is always done by the consumer.  Therefore, CQ callbacks must be
+enabled when:
+	* Any thread is in dat_evd_wait() on the EVD associated with
+	  the CQ.
+	* The EVD is enabled and has a non-null CNO.  (An alternative
+	  design would be to have waiters on a CNO enable callbacks on
+	  all CQs associated with all EVDs associated with the CNO,
+	  but this choice does not scale well as the number of EVDs
+	  associated with a CNO increases).
+
+Dynamic Resizing of EVDs
+------------------------
+
+dat_evd_resize() creates a special problem for the implementor, as it
+requires that the storage allocated in the EVD be changed in size as
+events may be arriving.  If a lock is held by all operations that use
+the EVD, implementation of dat_evd_resize() is trivial; it substitutes
+a new storage mechanism for the old one, copying over all current
+events, all under lock.
+
+However, we wish to avoid universal locking for the initial
+implementation.  This puts the implementation of dat_evd_resize() into
+a tar pit.  Because of the DAT Consumer requirements for a non-thread
+safe DAPL Implementation, there will be no danger of conflict with
+Event Consumers.  However, if an Event Producer is in process of
+adding an event to the circular list when the resize occurs, that
+event may be lost or overwrite freed memory.
+
+If we are willing to make the simplifying decision that any EVD that
+has non-CQ events on it will always do full producer side locking, we
+can solve this problem relatively easily.  Resizing of the underlying
+CQ can be done via ib_cq_resize(), which we can assume available
+because of the IB spec.  Resizing of the EVD storage may be done under
+lock, and there will be no collisions with other uses of the EVD as
+all other uses of the EVD must either take the lock or are prohibitted
+by the uDAPL spec.
+
+dat_evd_resize() has not yet been implemented in the DAPL Event
+subsystem.
+
+Structure and pseudo-code
+-------------------------
+
+-- EVD
+
+All EVDs will have associated with them:
+	+ a lock
+	+ A DAPL OS Wait Object
+	+ An enabled/disabled bit
+	+ A CNO pointer (may be null)
+	+ A state (no_waiter, waiter, dead)
+	+ A threshold count
+	+ An event list
+	+ A CQ (optional, but common)
+
+Posting an event to the EVD (presumably from a callback) will involve:
+^		+ Checking for valid state
+|lock A 	+ Putting the event on the event list
+|	^lock B	+ Signal the DAPL OS Wait Object, if appropriate
+v	v      	  (waiter & signaling event & over threshold)
+	       	+ Trigger the CNO if appropriate (enabled & signaling
+	       	  event & no waiter).  Note that the EVD lock is not
+	       	  held for this operation to avoid holding multiple locks.
+
+("lock A" is used if producer side locking is needed.  "lock B" is
+used if producer side locking is not needed.  Regardless, the lock is
+only held to confirm that the EVD is in the WAITED state, not for
+the wakeup).  
+
+Waiting on an EVD will include:
+	+ Loop:
+		+ Copy all elements from CQ to EVD
+		+ If we have enough, break
+		+ If we haven't enabled the CQ callback
+			+ Enable it
+			+ Continue
+		+ Sleep on DAPL OS Wait Object
+	+ Dequeue and return an event
+
+The CQ callback will include:
+	+ If there's a waiter:
+		+ Signal it
+	+ Otherwise, if the evd is in the OPEN state, there's
+	  a CNO, and the EVD is enabled:
+	  	+ Reenable completion
+		+ Trigger CNO
+
+Setting the enable/disable state of the EVD or setting the associated
+CNO will simply set the bits and enable the completion if needed (if a
+CNO trigger is implied); no locking is required.
+
+-- CNO
+
+All CNOs will have associated with them:
+	+ A lock
+	+ A DAPL OS Wait Object
+	+ A state (triggered, untriggered, dead)
+	+ A waiter count
+	+ An EVD handle (last event which triggered the CNO)
+	+ An OS Proxy Wait Object pointer (may be null)
+
+Triggering a CNO will involve:
+	^ + If the CNO state is untriggerred:
+	|     + Set it to triggered
+	|     + Note the OS Proxy wait object and zero it.
+	|     + If there are any waiters associated with the CNO,
+	|	signal them.
+	v     + Signal the OS proxy wait object if noted
+
+Waiting on a CNO will involve:
+	^ + While the state is not triggered and the timeout has not occurred:
+	|  	+ Increment the CNO waiter count
+	lock	+ Wait on the DAPL OS Wait Object
+	|	+ Decrement the CNO waiter count
+	v + If the state is trigerred, note fact&EVD and set to untrigerred.
+	  + Return EVD and success if state was trigerred
+	  + Return timeout otherwise
+
+Setting the OS Proxy Wait Object on a CNO, under lock, checks for a
+valid state and sets the OS Proxy Wait Object.
+
+
+==============
+Known Problems
+==============
+
+-- Because many event streams are actually delivered to EVDs by
+   callbacks, we cannot in general make any guarantees about the order
+   in which those event streams arrive; we are at the mercy of the
+   thread scheduler.  Thus we cannot hold to the guarantee given by
+   the uDAPL 1.0 specification that within a particular EVD,
+   connection events on a QP will always be before successful DTO
+   operations on that QP.
+
+   Because we have chosen to dequeue EVD events first and CQ events
+   second, we will also not be able to guarantee that all successful
+   DTO events will be received before a disconnect event.  Ability to
+   probe the CQ for its number of entries would solve this problem.
+
+
+=================
+Future Directions
+=================
+
+This section includes both functionality enhancements, and a series of
+performance improvements.  I mark these performance optimizations with
+the following flags:
+	* VerbMod: Requires modifications to the IB Verbs/the IBM
+	  Access API to be effective.
+	* VerbInteg: Requires integration between the DAPL
+	  implementation and the IB Verbs implementation and IB device
+	  driver.
+
+Functionality Enhancements
+--------------------------
+
+-- dat_evd_resize() may be implemented by forcing producer side
+   locking whenever an event producer may occur asynchronously with
+   calls to dat_evd_resize() (i.e. when there are non-CQ event streams
+   associated with the EVD).  See the details under "Dynamic Resizing
+   of EVDs" above.
+
+-- [VerbMod] If we ahd a verbs modification allowing us to probe for
+   the current number of entries on a CQ, we could:
+	* Avoid waking up a dat_evd_wait(threshold>1) thread until
+	  there were enough events for it.
+	* Avoid copying events from the CQ to the EVD to satisfy the
+	  requirements of the "*nmore" out argument to dat_evd_wait(),
+	  as well as the non-unary threshold argument.
+   	* Implement the "all successful DTO operation events before
+	  disconnect event" uDAPL guarantee (because we would no
+	  longer have to copy CQ events to an EVD, and hence dequeue
+	  first from the EVD and then from the CQ.
+   This optimization also is relevant for two of the performance
+   improvements cases below (Reducing context switches, and reducing
+   copies).
+
+
+Performance improvements: Reducing context switches
+---------------------------------------------------
+-- [VerbMod] If we had a verbs modification allowing us to probe for
+   the current size of a CQ, we could avoid waking up a
+   dat_evd_wait(threshhold>1) thread until there were enough events
+   for it.  See the Functionality Enhancement entry covering this
+   possibility.
+
+-- [VerbMod] If we had a verbs modification allowing threads to wait
+   for completions to occur on CQs (presumably in the kernel in some
+   efficient manner), we could optimize the case of
+   dat_evd_wait(...,threshold=1,...) on EVDs with only a single CQ
+   associated Event Stream.  In this case, we could avoid the extra
+   context switch into the user callback thread; instead, the user
+   thread waiting on the EVD would be woken up by the kernel directly.
+
+-- [VerbMod] If we had the above verbs modification with a threshold
+   argument on CQs, we could implement the threshold=n case.
+
+-- [VerbInteg] In general, It would be useful to provide ways for
+   threads blocked on EVDs or CNOs to sleep in the hardware driver,
+   and for the driver interrupt thread to determine if they should be
+   awoken rather than handing that determination off to another,
+   user-level thread.  This would allow us to reduce by one the number
+   of context switches required for waking up the various blocked
+   threads.
+
+-- If an EVD has only a single Event Stream coming into it that is
+   only associated with one work queue (send or receive), it may be
+   possible to create thresholding by marking only ever nth WQE on
+   the associated send or receive WQ to signal a completion.  The
+   difficulty with this is that the threshold is specified when
+   waiting on an EVD, and requesting completion signaling is
+   specified when posting a WQE; those two events may not in general
+   be synchronized enough for this strategy.  It is probably
+   worthwhile letting the consumer implement this strategy directly if
+   they so choose, by specifying the correct flags on EP and DTO so
+   that the CQ events are only signaling on every nth completion.
+   They could then use dat_evd_wait() with a threshold of 1.
+
+Performance improvements: Reducing copying of event data
+--------------------------------------------------------
+-- [VerbMod] If we had the ability to query a CQ for the number of
+   completions on it, we could avoid the cost of copying event data from the
+   CQ to the EVD.  This is a duplicate of the second entry under
+   "Functionality Enhancements" above.
+
+Performance improvements: Reducing locking
+------------------------------------------
+-- dat_evd_dequeue() may be modified to not take any locks.
+
+-- If there is no waiter associated with an EVD and there is only a
+   single event producer, we may avoid taking any locks in producing
+   events onto that EVD.  This must be done carefully to handle the
+   case of racing with a waiter waiting on the EVD as we deliver the
+   event.
+
+-- If there is no waiter associated with an EVD, and we create a
+   producer/consumer queue per event stream with a central counter
+   modified with atomic operations, we may avoid locking on the EVD.
+
+-- It may be possible, though judicious use of atomic operations, to
+   avoid locking when triggering a CNO unless there is a waiter on the
+   CNO.  This has not been done to keep the initial design simple.
+
+Performance improvements: Reducing atomic operations
+----------------------------------------------------
+-- We could combine the EVD circular lists, to avoid a single atomic
+   operation on each production and each consumption of an event.  In
+   this model, event structures would not move from list to list;
+   whether or not they had valid information on them would simply
+   depend on where they were on the lists.
+
+-- We may avoid the atomic increments on the circular queues (which
+   have a noticeable performance cost on the bus) if all accesses to an
+   EVD take locks.
+
+
+Performance improvements: Increasing concurrency
+------------------------------------------------
+-- When running on a multi-CPU platform, it may be appropriate to
+   assign CQs to several separate CQEHs, to increase the concurrency
+   of execution of CQ callbacks.  However, note that consumer code is
+   never run within a CQ callback, so those callbacks should take very
+   little time per callback.  This plan would only make sense in
+   situations where there were very many CQs, all of which were
+   active, and for whatever reason (high threshold, polling, etc)
+   user threads were usually not woken up by the execution of a
+   provider CQ callback.
+
+

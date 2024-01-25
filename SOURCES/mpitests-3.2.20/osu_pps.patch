@@ -1,0 +1,278 @@
+diff --git a/mpitests/osu-micro-benchmarks-4.4.1/mpi/pt2pt/osu_mbw_mr.c b/mpitests/osu-micro-benchmarks-4.4.1/mpi/pt2pt/osu_mbw_mr.c
+index 366be817..09059649 100644
+--- a/mpitests/osu-micro-benchmarks-4.4.1/mpi/pt2pt/osu_mbw_mr.c
++++ b/mpitests/osu-micro-benchmarks-4.4.1/mpi/pt2pt/osu_mbw_mr.c
+@@ -18,16 +18,16 @@
+ 
+ #define DEFAULT_WINDOW       (64)
+ 
+-#define ITERS_SMALL          (100)          
+-#define WARMUP_ITERS_SMALL   (10)
+-#define ITERS_LARGE          (20)
+-#define WARMUP_ITERS_LARGE   (2)
+-#define LARGE_THRESHOLD      (8192)
++#define ITERS_SMALL          (100000)          
++#define WARMUP_ITERS_SMALL   (100)
++#define ITERS_LARGE          (2000)
++#define WARMUP_ITERS_LARGE   (20)
++#define LARGE_THRESHOLD      (1024)
+ 
+ #define WINDOW_SIZES {8, 16, 32, 64, 128}
+ #define WINDOW_SIZES_COUNT   (5)
+ 
+-#define MAX_MSG_SIZE         (1<<22)
++#define MAX_MSG_SIZE         (65536)
+ #define MAX_ALIGNMENT        (65536)
+ #define MY_BUF_SIZE (MAX_MSG_SIZE + MAX_ALIGNMENT)
+ 
+@@ -37,6 +37,8 @@ char r_buf1[MY_BUF_SIZE];
+ MPI_Request * request;
+ MPI_Status * reqstat;
+ 
++int high_perf_test = 0;
++
+ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf, char *r_buf);
+ void usage();
+ 
+@@ -74,7 +76,7 @@ int main(int argc, char *argv[])
+     window_varied    = 0;
+     print_rate       = 1;
+ 
+-    while((c = getopt(argc, argv, "p:w:r:vh")) != -1) {
++    while((c = getopt(argc, argv, "p:w:r:vA:h")) != -1) {
+         switch (c) {
+             case 'p':
+                 pairs = atoi(optarg);
+@@ -97,6 +99,10 @@ int main(int argc, char *argv[])
+                 window_varied = 1;
+                 break;
+ 
++            case 'A':
++                high_perf_test = atoi(optarg);
++                break;
++
+             case 'r':
+                 print_rate = atoi(optarg);
+ 
+@@ -151,6 +157,9 @@ int main(int argc, char *argv[])
+             fprintf(stdout, "# [ pairs: %d ] [ window size: %d ]\n", pairs,
+                     window_size);
+ 
++            if (high_perf_test) {
++                fprintf(stdout, "# Running alternative test\n");
++            }
+             if(print_rate) {
+                 fprintf(stdout, "%-*s%*s%*s\n", 10, "# Size", FIELD_WIDTH,
+                         "MB/s", FIELD_WIDTH, "Messages/s");
+@@ -203,7 +212,7 @@ int main(int argc, char *argv[])
+            fflush(stdout);
+        }
+     
+-       for(j = 0, curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2, j++) {
++       for(j = 0, curr_size = 0; curr_size <= MAX_MSG_SIZE; curr_size = curr_size == 0 ? 1 : curr_size *2, j++) {
+            if(rank == 0) {
+                fprintf(stdout, "%-7d", curr_size);
+            }
+@@ -235,11 +244,11 @@ int main(int argc, char *argv[])
+             fprintf(stdout, "\n");
+             fflush(stdout);
+ 
+-            for(c = 0, curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2) { 
++            for(c = 0, curr_size = 0; curr_size <= MAX_MSG_SIZE; curr_size = curr_size == 0 ? 1 : curr_size *2) { 
+                 fprintf(stdout, "%-7d", curr_size); 
+ 
+                 for(i = 0; i < WINDOW_SIZES_COUNT; i++) {
+-                    double rate = 1e6 * bandwidth_results[c][i] / curr_size;
++                    double rate = 1e6 * bandwidth_results[c][i] / (curr_size == 0 ? 1 : curr_size);
+ 
+                     fprintf(stdout, "  %10.2f", rate);
+                 }       
+@@ -256,13 +265,13 @@ int main(int argc, char *argv[])
+        request = (MPI_Request *)malloc(sizeof(MPI_Request) * window_size);
+        reqstat = (MPI_Status *)malloc(sizeof(MPI_Status) * window_size);
+ 
+-       for(curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2) {
++       for(curr_size = 0; curr_size <= MAX_MSG_SIZE; curr_size = curr_size == 0 ? 1 : curr_size *2) {
+            double bw, rate;
+ 
+            bw = calc_bw(rank, curr_size, pairs, window_size, s_buf, r_buf);
+ 
+            if(rank == 0) {
+-               rate = 1e6 * bw / curr_size;
++               rate = 1e6 * bw / (curr_size == 0 ? 1 : curr_size);
+ 
+                if(print_rate) {
+                    fprintf(stdout, "%-*d%*.*f%*.*f\n", 10, curr_size,
+@@ -292,6 +301,10 @@ void usage() {
+     printf("                   [cannot be used with -v]\n");
+     printf("  -v               Vary the window size (default no)\n");
+     printf("                   [cannot be used with -w]\n");
++    printf("  -A=<1,2>         Run test in 'high performance' mode:\n"
++           "                      - do not wait for reciever ack after each window\n"
++           "                      - 1: keep window full, instead of waiting for all sent requests to complete\n" 
++           "                      - 2: Requests are sent with MPI_Send() for small messages (<256 bytes)\n"); 
+     printf("  -h               Print this help\n");
+     printf("\n");
+     printf("  Note: This benchmark relies on block ordering of the ranks.  Please see\n");
+@@ -324,54 +337,135 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
+     }
+ 
+     MPI_Barrier(MPI_COMM_WORLD);
++    
++    if (high_perf_test) {
++        if(rank < num_pairs) {
++            target = rank + num_pairs;
++
++            if (high_perf_test == 1 || size >= 256) {
++                for(j = 0; j < window_size; j++) {
++                    MPI_Isend(s_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
++                            request + j);
++                }
+ 
+-    if(rank < num_pairs) {
+-        target = rank + num_pairs;
++                for(i = 0; i < loop + skip; i++) {
++                    if(i == skip) {
++                        MPI_Barrier(MPI_COMM_WORLD);
++                        t_start = MPI_Wtime();
++                    }
+ 
+-        for(i = 0; i < loop + skip; i++) {
+-            if(i == skip) {
+-                MPI_Barrier(MPI_COMM_WORLD);
+-                t_start = MPI_Wtime();
+-            }
++                    for(j = 0; j < window_size; j++) {
++                        MPI_Wait(request + j, reqstat);
++                        MPI_Isend(s_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
++                                request + j);
++                    }
++                }
+ 
+-            for(j = 0; j < window_size; j++) {
+-                MPI_Isend(s_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
+-                        request + j);
++                for(j = 0; j < window_size; j++) {
++                    MPI_Wait(request + j, reqstat);
++                }
+             }
++            else {
++                for(j = 0; j < window_size; j++) {
++                    MPI_Send(s_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD);
++                }
++
++                for(i = 0; i < loop + skip; i++) {
++                    if(i == skip) {
++                        MPI_Barrier(MPI_COMM_WORLD);
++                        t_start = MPI_Wtime();
++                    }
+ 
+-            MPI_Waitall(window_size, request, reqstat);
++                    for(j = 0; j < window_size; j++) {
++                        MPI_Send(s_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD);
++                    }
++                }
++            }
+             MPI_Recv(r_buf, 4, MPI_CHAR, target, 101, MPI_COMM_WORLD,
+-                    &reqstat[0]);
++                                    &reqstat[0]);
++            t_end = MPI_Wtime();
++            t = t_end - t_start;
+         }
+ 
+-        t_end = MPI_Wtime();
+-        t = t_end - t_start;
+-    }
+-
+-    else if(rank < num_pairs * 2) {
+-        target = rank - num_pairs;
+-
+-        for(i = 0; i < loop + skip; i++) {
+-            if(i == skip) {
+-                MPI_Barrier(MPI_COMM_WORLD);
+-            }
++        else if(rank < num_pairs * 2) {
++            target = rank - num_pairs;
+ 
+             for(j = 0; j < window_size; j++) {
+                 MPI_Irecv(r_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
+                         request + j);
+             }
++            for(i = 0; i < loop + skip; i++) {
++                if(i == skip) {
++                    MPI_Barrier(MPI_COMM_WORLD);
++                }
+ 
+-            MPI_Waitall(window_size, request, reqstat);
++                for(j = 0; j < window_size; j++) {
++                    MPI_Wait(request + j, reqstat);
++                    MPI_Irecv(r_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
++                            request + j);
++                }
++            }
++            for(j = 0; j < window_size; j++) {
++                MPI_Wait(request + j, reqstat);
++            }
+             MPI_Send(s_buf, 4, MPI_CHAR, target, 101, MPI_COMM_WORLD);
+         }
+-    }
++        else {
++            MPI_Barrier(MPI_COMM_WORLD);
++        }
+ 
++    }
+     else {
+-        MPI_Barrier(MPI_COMM_WORLD);
++        if(rank < num_pairs) {
++            target = rank + num_pairs;
++
++            for(i = 0; i < loop + skip; i++) {
++                if(i == skip) {
++                    MPI_Barrier(MPI_COMM_WORLD);
++                    t_start = MPI_Wtime();
++                }
++
++                for(j = 0; j < window_size; j++) {
++                    MPI_Isend(s_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
++                            request + j);
++                }
++
++                MPI_Waitall(window_size, request, reqstat);
++                MPI_Recv(r_buf, 4, MPI_CHAR, target, 101, MPI_COMM_WORLD,
++                        &reqstat[0]);
++            }
++
++            t_end = MPI_Wtime();
++            t = t_end - t_start;
++        }
++
++        else if(rank < num_pairs * 2) {
++            target = rank - num_pairs;
++
++            for(i = 0; i < loop + skip; i++) {
++                if(i == skip) {
++                    MPI_Barrier(MPI_COMM_WORLD);
++                }
++
++                for(j = 0; j < window_size; j++) {
++                    MPI_Irecv(r_buf, size, MPI_CHAR, target, 100, MPI_COMM_WORLD,
++                            request + j);
++                }
++
++                MPI_Waitall(window_size, request, reqstat);
++                MPI_Send(s_buf, 4, MPI_CHAR, target, 101, MPI_COMM_WORLD);
++            }
++        }
++
++        else {
++            MPI_Barrier(MPI_COMM_WORLD);
++        }
+     }
+ 
+     MPI_Reduce(&t, &sum_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+ 
++    /* count zero size messages as 1 byte ones... */
++    if (size == 0) size = 1;
+     if(rank == 0) {
+         double tmp = size / 1e6 * num_pairs ;
+         

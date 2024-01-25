@@ -1,0 +1,90 @@
+.TH dtestsrq 1 "November 15, 2016" "uDAPL 2.1" "USER COMMANDS"
+
+.SH NAME
+dtestsrq \- simple uDAPL send/receive and RDMA test with shared receive queue. \fB(SRQ)\fr
+
+.SH SYNOPSIS
+.B dtestsrq
+[\-vu] [\-P provider] [\-b buf size] [\-B burst size] [\-t burst num] [\-c connections] [\-p port] [\-S 0|1] \fB[ \-s | \-h HOSTNAME ]\fR
+
+.SH DESCRIPTION
+.PP
+dtestsrq is a simple test used to exercise and verify the uDAPL interfaces. 
+At least two instantiations of the test must be run. One acts as the server 
+and the other the client. The server side of the test, once invoked listens 
+for connection requests, until timing out or killed. Upon receipt of a cd 
+connection request, the connection is established, the server and client 
+sides exchange information necessary to perform RDMA writes and reads.
+This test support SRQ so all the connections will share the same Rx Q.
+
+.SH OPTIONS
+
+.PP
+.TP
+\fB\-P\fR=\fIPROVIDER\fR
+use \fIPROVIDER\fR to specify uDAPL interface using /etc/dat.conf (default ofa-v2-ib0)
+.TP
+\fB\-h\fR=\fIHOSTNAME\fR
+use \fIHOSTNAME\fR to specify server hostname or IP address (default - none)
+.TP
+\fB\-b\fR=\fIBUFFER_SIZE\fR
+use buffer size \fIBUFFER_SIZE\fR for RDMA (default 64)
+.TP
+\fB\-B\fR=\fIBURST_SIZE\fR
+use burst size \fIBURST_SIZE\fR (default 1)
+.TP
+\fB\-t\fR=\fIBURST_COUNT\fR
+use burst count \fIBURST_COUNT\fR (default 3)
+.TP
+\fB\-p\fR=\fIPORT_NUM\fR
+use port \fIPORT_NUM\fR (default 45248)
+.TP
+\fB\-c\fR=\fICONN_NUM\fR
+establish \fICONN_NUM\fR connections (default = 1, max = 100)
+.TP
+\fB\-s\fR, run as server (default - run as server)
+.TP
+\fB\-S\fR, use SRQ (default use SQR)
+.TP
+\fB\-v\fR, verbose output(default off)
+.TP
+\fB\-u\fR, run ud test (default no)
+.TP
+\fB\-l\fR=\fILID\fR
+use \fILID\fR for server lid in ucm provider (default - none)
+.TP
+\fB\-q\fR=\fIQPN\fR
+use \fIQPN\fR for server qpn in ucm provider (default - none)
+
+
+.SH EXAMPLES
+
+dtestsrq -P ofa-v2-ib0 -s -c 10
+.PP
+.nf
+.fam C
+     Starts a server process with 10 connections using provider ofa-v2-ib0.
+
+.fam T
+.fi
+dtestsrq -P ofa-v2-ib0 -c 10 -h server1-ib0 
+.PP
+.nf
+.fam C
+     Starts a client process with 10 connections, using ofa-v2-ib0 provider to connect to hostname server1-ib0.
+
+.fam T
+
+.SH SEE ALSO
+.BR dtest(1),
+.BR dtestx(1),
+.BR dtestcm(1),
+.BR dapltest(1) 
+
+.SH AUTHORS
+.TP
+Arlin Davis
+.RI < arlin.r.davis@intel.com >
+.TP
+Amir Hanania
+.RI < amir.hanania@intel.com >

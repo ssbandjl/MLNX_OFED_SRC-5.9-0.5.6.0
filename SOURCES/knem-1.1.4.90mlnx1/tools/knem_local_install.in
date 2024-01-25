@@ -1,0 +1,140 @@
+#!/bin/sh
+
+# Copyright © inria 2009-2010
+# Brice Goglin <Brice.Goglin@inria.fr>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. The name of the author may not be used to endorse or promote products
+#    derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+# OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+MODULE_FILE=knem.ko
+KVERSION=${KVERSION:-$(uname -r)}
+MODULE_SRCDIR=@prefix@/lib/modules/${KVERSION}
+MODULE_SRC=${MODULE_SRCDIR}/${MODULE_FILE}
+MODULE_DESTDIR=${MODULE_DESTDIR:-/lib/modules/${KVERSION}/extra/${KPNAME}}
+MODULE_DEST=${MODULE_DESTDIR}/${MODULE_FILE}
+
+UDEV_FILE=10-knem.rules
+UDEV_SRCDIR=@prefix@/etc
+UDEV_SRC=${UDEV_SRCDIR}/${UDEV_FILE}
+UDEV_DESTDIR=/etc/udev/rules.d
+UDEV_DEST=${UDEV_DESTDIR}/${UDEV_FILE}
+
+set -e
+
+if test x$# != x0 -a x"$1" != x--uninstall; then
+    echo "$0:"
+    echo " Install kernel module and udev rules file to the system directories"
+    echo " so that 'modprobe knem' works."
+    echo " If destination files already exist and are different, they are renamed."
+    echo " If DESTDIR is set in the environment, it is used as the file-system root."
+    echo " If --uninstall is given, destination files are uninstalled."
+    exit 0
+fi
+
+if test x"${DESTDIR}" != x; then
+    echo "Using ${DESTDIR} as the file-system root"
+fi
+
+if test ! -d ${DESTDIR}@prefix@; then
+    echo "Something bad happened with the install script"
+    echo "Prefix @prefix@ isn't pointing to a valid directory"
+    exit 1
+fi
+
+DATE=$(date +%Y%m%d.%H%M%S)
+
+cmp_mv_old_and_install_new() {
+    src="$1" ; shift
+    dest="$1"; shift
+    installname="$1" ; shift
+
+    if test -f "${DESTDIR}$dest" ; then
+	# if no difference, do nothing
+	if cmp -s "${DESTDIR}$dest" "${DESTDIR}$src" ; then
+	    echo "  File $dest is unchanged"
+	    return
+	fi
+
+	# move the old file away
+	echo "  Saving the old $dest into ${dest}.${DATE}..."
+	mv -f "${DESTDIR}$dest" "${DESTDIR}${dest}.${DATE}"
+    fi
+
+    echo "  Installing $installname $dest..."
+    cp -f "${DESTDIR}$src" "${DESTDIR}$dest"
+}
+
+cmp_mv_old_and_remove() {
+    src="$1" ; shift
+    dest="$1"; shift
+    installname="$1" ; shift
+
+    if test ! -f "${DESTDIR}$dest" ; then
+	echo "  File $dest not found"
+	return
+    fi
+
+    # if no difference, just remove
+    if cmp -s "${DESTDIR}$dest" "${DESTDIR}$src" ; then
+	echo "  File $dest is unchanged, removing..."
+	rm -f "${DESTDIR}$dest"
+	return
+    fi
+
+    # move the old file away
+    echo "  Saving the old $dest into ${dest}.${DATE}..."
+    mv -f "${DESTDIR}$dest" "${DESTDIR}${dest}.${DATE}"
+}
+
+if test x"$1" != "x--uninstall"; then
+    # installing
+
+    echo "Installing module..."
+    if test ! -d ${DESTDIR}${MODULE_DESTDIR} ; then
+	echo "  Creating ${MODULE_DESTDIR} directory..."
+	mkdir -p ${DESTDIR}${MODULE_DESTDIR}
+    fi
+    cmp_mv_old_and_install_new "${MODULE_SRC}" "${MODULE_DEST}" "module"
+
+    if test x"$DESTDIR" = x ; then
+	echo "  Running depmod"
+	/sbin/depmod -a
+    else
+	echo "  Not running depmod when in non-standard the file-system root"
+    fi
+
+    echo "Installing udev rules file..."
+    if test ! -d ${DESTDIR}${UDEV_DESTDIR} ; then
+	echo "  Creating ${UDEV_DESTDIR} directory..."
+	mkdir -p ${DESTDIR}${UDEV_DESTDIR}
+    fi
+    cmp_mv_old_and_install_new "${UDEV_SRC}" "${UDEV_DEST}" "udev rules"
+
+else
+    # uninstalling
+
+    echo "Uninstalling module..."
+    cmp_mv_old_and_remove "${MODULE_SRC}" "${MODULE_DEST}" "module"
+
+    echo "Uninstalling udev rules file..."
+    cmp_mv_old_and_remove "${UDEV_SRC}" "${UDEV_DEST}" "udev rules"
+fi

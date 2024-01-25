@@ -1,0 +1,89 @@
+.TH dtestx 1 "November 15, 2016" "uDAPL 2.1" "USER COMMANDS"
+
+.SH NAME
+dtestx \- simple uDAPL extensions test
+
+.SH SYNOPSIS
+.B dtestx
+[\-vmpqc] [\-u|\-U ep num] [\-P provider] [\-b buf size] \fB[ \-s | \-h HOSTNAME ]\fR 
+
+.SH DESCRIPTION
+.PP
+dtestx is a simple test used to test extensions to the DAT API.
+At least two instantiations of the test must be run. One acts as the server 
+and the other the client. The server side of the test, once invoked listens 
+for connection requests, until timing out or killed. Upon receipt of a cd 
+connection request, the connection is established, the server and client 
+sides exchange information necessary to perform extensions test.
+.TP 8
+Extensions tests are:
+1. Post rdma write with immediate data
+.br
+2. Atomic compare and swap
+.br
+3. Atomic fetch and add
+.br	
+Note: In case -q is set only query test will run.
+
+.SH OPTIONS
+
+.PP
+.TP
+\fB\-P\fR=\fIPROVIDER\fR
+use \fIPROVIDER\fR to specify uDAPL interface using /etc/dat.conf (default ofa-v2-mlx4_0-1u)
+.TP
+\fB\-h\fR=\fIHOSTNAME\fR
+use \fIHOSTNAME\fR to specify server hostname or IP address (default - none)
+.TP
+\fB\-b\fR=\fIBUFFER_SIZE\fR
+use buffer size \fIBUFFER_SIZE\fR for RDMA(default 64)
+.TP
+\fB\-U\fR=\fIEP_COUNT\fR
+use \fIEP_COUNT\fR to specify unreliable datagram test with \fIEP_COUNT\fR UD endpoints (default - none)
+.TP
+\fB\-v\fR, verbose output(default off)
+.TP
+\fB\-q\fR, query only test (default off)
+.TP
+\fB\-u\fR, unreliable datagram test (default no)
+.TP
+\fB\-s\fR, run as server (default - run as server)
+.TP
+\fB\-c\fR, run as client (for non UD tests, -h is always client)
+.TP
+\fB\-p\fR, print counters. Provide IA, EP, or EVD and call will print appropriate counters (default off)
+.TP
+\fB\-m\fR, multi ep. in ud test only. receive multi messages on single EP. (default off - receive one message across multiple EPs)
+
+.SH EXAMPLES
+
+dtestx -P ofa-v2-ib0 -v -s
+.PP
+.nf
+.fam C
+     Starts a server process with debug verbosity using provider ofa-v2-ib0.
+
+.fam T
+.fi
+dtestx -P ofa-v2-ib0 -h server1-ib0 
+.PP
+.nf
+.fam C
+     Starts a client process, using ofa-v2-ib0 provider to connect to hostname server1-ib0.
+
+.fam T
+
+.SH SEE ALSO
+.BR dtest(1),
+.BR dtestsrq(1),
+.BR dtestcm(1),
+.BR dapltest(1)
+
+.SH AUTHORS
+.TP
+Arlin Davis
+.RI < arlin.r.davis@intel.com >
+.TP
+Amir Hanania
+.RI < amir.hanania@intel.com >
+

@@ -1,0 +1,173 @@
+#######################################################################
+#                                                                     #
+# DAPL Memory Management Design                                       #
+#                                                                     #
+# James Lentini                                                       #
+# jlentini at users.sourceforge.net                                   #
+#                                                                     #
+# Created 05/06/2002                                                  #
+# Updated 08/22/2002                                                  #
+#                                                                     #
+#######################################################################
+
+
+Contents
+-------
+0. Introduction
+1. Protection Zones (PZs)
+2. Local Memory Regions (LMRs)
+3. Remote Memory Regions (RMRs)
+
+
+0. Introduction
+---------------
+
+   The memory management subsystem allows consumers to register and 
+unregister memory regions.  The DAT API distinguishes between local 
+and remote memory areas.  The former server as local buffers for DTO 
+operations while the later are used for RDMA operations.  
+
+Each DAT function is implemented in a file named dapl_<function name>.c.  
+For example, dat_pz_create is implemented in dapl_pz_create.c.  There 
+are also dapl_<object name>_util.{h,c} files for each object.  For 
+example, there are dapl_pz_util.h and dapl_pz_util.c files.  The 
+use of util files follows the convention used elsewhere in the DAPL 
+reference provider.  These files contain common object creation and 
+destruction code.
+
+
+1. Protection Zones (PZs)
+-------------------------
+
+   DAPL protection zones provide consumers with a means to associate 
+various DAPL objects with one another.  The association can then be 
+validated before allowing these objects to be manipulated.  The DAT 
+functions related to PZs are:
+
+dat_pz_create
+dat_pz_free
+dat_pz_query
+
+These are implemented in the DAPL reference provider by 
+
+dapl_pz_create
+dapl_pz_free
+dapl_pz_query
+
+The reference implementation maps the DAPL PZ concept onto Infiniband 
+protections domains (PDs).  
+
+The DAT_PZ_HANDLE value returned to DAT consumers is a pointer to a 
+DAPL_PZ data structure. The DAPL_PZ structure is used to represent all 
+PZ objects. Code that manipulates this structure should atomically 
+increment and decrement the ref_count member to track the number of 
+objects referencing the PZ.
+
+
+2. Local Memory Regions (LMRs)
+------------------------------
+
+    DAPL local memory regions represent a memory area on the host 
+system that the consumer wishes to access via local DTO operations.  
+The DAT functions related to LMRs are:
+
+dat_lmr_create
+dat_lmr_free
+dat_lmr_query
+
+These are implemented in 
+
+dapl_lmr_create
+dapl_lmr_free
+dapl_lmr_query
+
+In the reference implementation, DAPL LMRs are mapped onto 
+Infiniband memory regions (MRs).  
+
+LMR creation produces two values: a DAT_LMR_CONTEXT and a 
+DAT_LRM_HANDLE. 
+
+The DAT_LMR_CONTEXT value is used to uniquely identify the LMR 
+when posting data transfer operations. These values map directly 
+to Infiniband L_KEYs.
+
+Since some DAT functions need to translate a DAT_LMR_CONTEXT value 
+into a DAT_LMR_HANDLE (ex. dat_rmr_bind), a dictionary data structure 
+is used to associate DAT_LMR_CONTEXT values with their corresponding 
+DAT_LMR_HANDLE.  Each time a new LMR is created, the DAT_LMR_HANDLE 
+should be inserted into the dictionary with the associated 
+DAT_LMR_CONTEXT as the key. 
+
+A hash table was chosen to implement this data structure. Since the 
+L_KEY values are being used by the CA hardware for indexing purposes, 
+there distribution is expected to be uniform and hence ideal for hashing.
+
+The DAT_LMR_HANDLE value returned to DAT consumers is a pointer to 
+a DAPL_LMR data structure. The DAPL_LMR structure is used to represent 
+all LMR objects. The ref_count member should be used to track objects 
+associated with a given LMR.
+
+The DAT API exposes the DAT_LMR_CONTEXT to consumers to allow 
+for sharing of memory registrations between multiple address spaces. 
+The mechanism by which such a feature would be implemented does not 
+yet exist. Consumers may be able to take advantage of this 
+feature on future transports. 
+
+
+3. Remote Memory Regions (RMRs)
+-------------------------------
+
+    DAPL remote memory regions represent a memory area on the host 
+system to which the consumer wishes to allow RMDA operations.  The 
+related DAT functions are
+
+dat_rmr_create
+dat_rmr_free
+dat_rmr_query
+dat_rmr_bind
+
+which are implemented in 
+
+dapl_rmr_create
+dapl_rmr_free
+dapl_rmr_query
+dapl_rmr_bind
+
+The reference provider maps RMR objects onto Infiniband memory 
+windows.
+
+The DAT_RMR_HANDLE value returned to DAT consumers is a pointer to 
+a DAPL_RMR data structure. The DAPL_RMR structure is used to represent 
+all RMR objects.
+
+The API for binding a LMR to a RMR has the following function 
+signature:
+
+DAT_RETURN
+dapl_rmr_bind (
+	IN	DAT_RMR_HANDLE		rmr_handle,
+	IN	const DAT_LMR_TRIPLET	*lmr_triplet,
+	IN	DAT_MEM_PRIV_FLAGS	mem_priv,
+	IN	DAT_EP_HANDLE		ep_handle,
+	IN	DAT_RMR_COOKIE		user_cookie,
+	IN	DAT_COMPLETION_FLAGS 	completion_flags,
+	OUT	DAT_RMR_CONTEXT		*rmr_context )
+
+where a DAT_LMR_TRIPLET is defined as: 
+
+typedef struct dat_lmr_triplet
+    {
+    DAT_LMR_CONTEXT     lmr_context;
+    DAT_UINT32          pad;
+    DAT_VADDR           virtual_address;
+    DAT_VLEN            segment_length;
+    } DAT_LMR_TRIPLET;
+
+In the case of IB, the DAT_LMR_CONTEXT value is a L_KEY.
+As described in the IB spec, the Bind Memory Window verb 
+takes both a L_KEY and Memory Region Handle among other 
+parameters. Therefore a data structure must be used to 
+map a DAT_LMR_CONTEXT (L_KEY) value to a DAPL_LMR so 
+that the needed memory region handle can be retrieved.
+The LMR hash table described above is used for this 
+purpose.

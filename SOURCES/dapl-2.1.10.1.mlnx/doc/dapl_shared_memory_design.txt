@@ -1,0 +1,876 @@
+#######################################################################
+#                                                                     #
+# DAPL Shared Memory Design                                           #
+#                                                                     #
+# James Lentini                                                       #
+# jlentini at users.sourceforge.net                                   #
+#                                                                     #
+# Created 09/17/2002                                                  #
+# Updated 01/21/2005                                                  #
+# Version 0.04                                                        #
+#                                                                     #
+#######################################################################
+
+
+Contents
+--------
+0. Introduction
+1. Referenced Documents
+2. Requirements
+3. Interface
+4. Implementation Options
+
+
+Introduction
+------------
+
+This document describes the design of shared memory registration for 
+the DAPL reference implementation (RI).
+
+Implementing shared memory support completely within the DAPL RI 
+would not be an ideal solution. A more robust and efficient
+implementation can be acheived by HCA vendors that integrate a DAT
+provider into their software stack. Therefore the RI will not contain
+an implementation of this feature. 
+
+
+Referenced Documents
+--------------------
+
+kDAPL: Kernel Direct Access Programming Library, Version 1.2.
+uDAPL: User Direct Access Programming Library, Version 1.2.
+Available in the DAPL SourceForge repository at
+[doc/api/kDAPL_spec.pdf] and [doc/api/uDAPL_spec.pdf]. Collectively
+referred to in this document as the "DAT Specification". 
+
+InfiniBand Access Application Programming Interface Specification,
+Version 1.2, 4/15/2002. Available in the DAPL SourceForge repository
+at [doc/api/IBM_access_api.pdf]. Referred to in this document as the
+"IBM Access API Specification". 
+
+Mellanox IB-Verbs API (VAPI) Mellanox Software Programmers Interface
+for InfiniBand Verbs. Available in the DAPL SourceForge repository
+at [doc/api/MellanoxVerbsAPI.pdf]. Referred to in this document as the
+"VAPI API Specification".
+
+InfiniBand Architecture Specification, Volumes 1 and 2, Release
+1.2, Available from http://www.infinibandta.org/
+Referred to in this document as the "Infiniband Specification".
+
+
+Requirements
+------------
+
+The DAT shared memory model can be characterized as a peer-to-peer
+model since the order in which consumers register a region is not
+dictated by the programming interface.
+
+The DAT API function used to register shared memory is:
+
+DAT_RETURN
+dat_lmr_create (
+        IN     DAT_IA_HANDLE            ia_handle,
+        IN      DAT_MEM_TYPE            mem_type,
+        IN      DAT_REGION_DESCRIPTION  region_description,
+        IN      DAT_VLEN                length,
+        IN      DAT_PZ_HANDLE           pz_handle,
+        IN      DAT_MEM_PRIV_FLAGS      mem_privileges,
+        OUT     DAT_LMR_HANDLE          *lmr_handle,
+        OUT     DAT_LMR_CONTEXT         *lmr_context,
+        OUT     DAT_RMR_CONTEXT         *rmr_context,
+        OUT     DAT_VLEN                *registered_length,
+        OUT     DAT_VADDR               *registered_address );
+
+where a DAT_REGION_DESCRIPTION is defined as:
+
+typedef union dat_region_description
+{
+        DAT_PVOID                   for_va;
+        DAT_LMR_HANDLE              for_lmr_handle;
+        DAT_SHARED_MEMORY           for_shared_memory;
+} DAT_REGION_DESCRIPTION;
+
+In the case of a shared memory registration the DAT consumer will set
+the DAT_MEM_TYPE flag to DAT_MEM_TYPE_SHARED_VIRTUAL and place a
+cookie in the DAT_REGION_DESCRIPTION union's DAT_SHARED_MEMORY
+member. The DAT_SHARED_MEMORY type is defined as follows:
+
+typedef struct dat_shared_memory
+{
+        DAT_PVOID                   virtual_address;
+        DAT_LMR_COOKIE              shared_memory_id;
+} DAT_SHARED_MEMORY;
+
+Unlike the DAT peer-to-peer model, the Infiniband shared memory model
+requires a master-slave relationship. A memory region must first be
+registered using the Register Memory Region verb with subsequent
+registrations made using the Register Shared Memory Region verb. 
+
+The later is implemented in the IBM OS Access API as:
+
+ib_int32_t 
+ib_mr_shared_register_us( 
+        ib_hca_handle_t         hca_handle,
+        ib_mr_handle_t          *mr_handle, /* IN-OUT: could be changed */
+        ib_pd_handle_t          pd_handle, /* IN */
+        ib_uint32_t             access_control, /* IN */
+        ib_uint32_t             *l_key, /* OUT */
+        ib_uint32_t             *r_key, /* OUT: if remote access needed */
+        ib_uint8_t              **va ); /* IN-OUT: virt. addr. to register */
+
+The important parameter is the memory region handle which must be the
+same as an already registered region.
+
+Two requirements are implied by this difference between the DAT and 
+Infiniband models. First, DAPL implementations need a way to determine
+the first registration of a shared region. Second implementations must
+map DAT_LMR_COOKIE values to memory region handles both within and
+across processes. To satisfy the above requirements DAPL must maintain
+this information in a system wide database.
+
+The difficulty of implementing such a database at the DAT provider
+level is the reason the RI's shared memory code is meant to be
+temporary. Such a database is much better suited as part of the HCA
+vendor's software stack, specifically as part of their HCA driver. 
+
+If DAPL was based on a master-slave model like InfiniBand, the
+implementation of shared memory would be straight
+forward. Specifically the complexity is a result of the consumer being
+responsible for specifying the DAT_LMR_COOKIE values. If the DAPL
+spec. were changed to allow the provider and not the consumer to
+specify the DAT_LMR_COOKIE value, the implementation of this feature
+would be greatly simplified. Since the DAPL API already requires
+consumers to communicate the DAT_LMR_COOKIE values between processes,
+such a change places minimal additional requirements on the
+consumer. The dapl_lmr_query call could easily be adapted to allow the
+consumer to query the provider for a given LMR's DAT_LMR_COOKIE
+value. The only spec changes needed would be to add a DAT_LMR_COOKIE
+member to the DAT_LMR_PARAM structure and a DAT_LMR_FIELD_LMR_COOKIE
+constant to the DAT_LMR_PARAM_MASK enumeration. A provider could then
+store the given LMR's memory region handle in this value, greatly
+simplifying the implementation of shared memory in DAPL.  
+
+
+Interface
+---------
+
+To allow the database implementation to easily change, the RI would use
+a well defined interface between the memory subsystem and the
+database. Conceptually the database would contain a single table with
+the following columns:
+
+[ LMR Cookie ][ MR Handle ][ Reference Count ][ Initialized ]
+
+where the LMR Cookie column is the primary key.
+
+The following functions would be used to access the database:
+
+DAT_RETURN
+dapls_mrdb_init (
+        void );
+
+ Called by dapl_init(.) to perform any necessary database
+ initialization. 
+
+DAT_RETURN
+dapls_mrdb_exit (
+        void );
+
+ Called by dapl_fini(.) to perform any necessary database cleanup.
+
+DAT_RETURN
+dapls_mrdb_record_insert (
+        IN  DAPL_LMR_COOKIE     cookie );
+
+ If there is no record for the specified cookie, an empty record is
+ added with a reference count of 1 and the initialized field is set to
+ false. If a record already exists, the function returns an error.
+
+DAT_RETURN 
+dapls_mrdb_record_update (
+	IN  DAPL_LMR_COOKIE     cookie, 
+        IN  ib_mr_handle_t      mr_handle );
+
+ If there is a record for the specified cookie, the MR handle field is
+ set to the specified mr_handle value and the initialized field is set
+ to true. Otherwise an error is returned.
+
+DAT_RETURN
+dapls_mrdb_record_query (
+	IN  DAPL_LMR_COOKIE     cookie,
+        OUT ib_mr_handle_t      *mr_handle );
+
+ If there is a record for the specified cookie and the initialized
+ field is true, the MR handle field is returned and the reference
+ count field is incremented. Otherwise an error is returned. 
+
+DAT_RETURN
+dapls_mrdb_record_dec (
+	IN  DAPL_LMR_COOKIE     cookie );
+
+ If there is a record for the specified cookie, the reference count
+ field is decremented. If the reference count is zero after the
+ decrement, the record is removed from the database. Otherwise an
+ error is returned. 
+
+The generic algorithms for creating and destroying a shared memory
+region are:
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: CreateShared
+ Inputs: 
+         ia_handle
+         pz_handle
+         address
+         length
+         lmr_cookie
+         privileges
+ Outputs:
+         lmr_handle
+         lmr_context
+         registered_address
+         registered_length
+
+forever 
+{
+   if dapls_mrdb_record_insert(cookie) is successful
+   {
+      if dapl_lmr_create_virtual is not successful 
+         dapls_mrdb_record_dec(cookie)
+         return error
+
+      else if dapls_mrdb_record_update(cookie, lmr->mr_handle) is not successful
+         dapls_mrdb_record_dec(cookie)
+         return error
+
+      else break
+   }
+   else if dapls_mrdb_record_query(cookie, mr_handle) is successful
+   {
+      if ib_mrdb_shared_register_us is not successful
+         dapls_mrdb_record_dec(cookie)
+         return error
+
+     else  break
+   }
+}
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: FreeShared
+ Inputs: 
+         lmr
+ Outputs:
+
+if dapls_ib_mr_deregister(lmr) is successful
+   dapls_mrdb_record_dec(lmr->cookie)
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+Implementation Options
+----------------------
+
+As described above the crucial functionality needed to implement
+shared memory support is a system wide database for mapping LMR
+cookies to memory region handles. The following designs represent some
+of the options for implementing such a database. Adding a database
+increases the complexity of DAPL from both an implementor and user's
+perspective. These designs should be evaluated on the degree to which
+they minimize the additional complexity while still providing a robust
+solution. 
+
+
+ File System Database
+ --------------------
+
+Employing a database that is already part of the system would be
+ideal. One option on Linux is to use the file system. An area of the
+file system could be set aside for the creation of files to represent
+each LMR cookie. The area of the file system could be specified
+through a hard coded value, an environment variable, or a
+configuration file. A good candidate would be a DAPL subdirectory of
+/tmp. 
+
+Exclusive file creation is available through the creat(2) system call
+in Linux. The standard I/O interface (fopen(3), etc.) does not support
+this feature making porting difficult. However porting to other
+environments is not a goal of this design since the entire scheme is
+only a temporary solution. 
+
+Determining when to delete the files is a difficult problem. A
+reference count is required to properly remove a file once all the
+memory regions it represents are deregistered. The synchronization
+mechanism necessary for maintaining the reference count is not easily
+implemented. As an alternative, a script could be provided to clean up
+the database by removing all the files. The script would need to be
+run before any DAPL consumers were started to ensure a clean
+database. The disadvantage of using a script is that no DAPL instances
+can be running when it is used. Another option would be to store the
+process ID (PID) of the process that created the file as part of the
+file's contents. Upon finding a record for a given LMR cookie value, a
+DAPL instance could determine if there was a process with the same PID
+in the system. To accomplish this the kill(2) system call could be
+used (ex. kill(pid, 0) ). This method of validating the record assumes
+that all DAPL instances can signal one another and that the PID values
+do not wrap before the check is made. 
+
+Another difficulty with this solution is choosing an accessible
+portion of the file system. The area must have permissions that allow
+all processes using DAPL to access and modify its contents. System
+administrators are typically reluctant to allow areas without any
+access controls. Typically such areas are on a dedicated file system
+of a minimal size to ensure that malicious or malfunctioning software
+does not monopolize the system's storage capacity. Since very little
+information will be stored in each file it is unlikely that DAPL would
+need a large amount of storage space even if a large number of shared
+memory regions were in use. However since a file is needed for each
+shared region, a large number of shared registrations may lead to the
+consumption of all a file system's inodes. Again since this solution
+is meant to be only temporary this constraint may be acceptable.
+
+There is also the possibility for database corruption should a process
+crash or deadlock at an inopportune time. If a process creates file x
+and then crashes all other processes waiting for the memory handle to
+be written to x will fail. 
+
+The database interface could be implemented as follows:
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_init
+ Inputs: 
+
+ Outputs:
+
+return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_exit
+ Inputs: 
+
+ Outputs:
+
+return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_insert 
+ Inputs: 
+         cookie
+ Outputs:
+
+file_name = convert cookie to valid file name
+
+fd = exclusively create file_name
+if fd is invalid
+   return failure
+
+if close fd fails
+   return failure
+
+return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_update 
+ Inputs: 
+         cookie
+         mr_handle
+ Outputs:
+ 
+file_name = convert cookie to valid file name
+
+fd = open file_name
+if fd is invalid
+   return failure
+
+if write mr_handle to file_name fails
+   return failure
+
+if close fd fails
+   return failure
+
+return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_query 
+ Inputs: 
+         cookie
+
+ Outputs:
+         mr_handle
+
+file_name = convert cookie to valid file name
+
+fd = open file_name
+if fd is invalid
+   return failure
+
+if read mr_handle from file_name fails
+   return failure
+
+if close fd fails
+   return failure
+
+return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_dec 
+ Inputs: 
+         cookie
+ Outputs:
+
+return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+ Daemon Database
+ ---------------
+
+The database could be maintained by a separate daemon process. 
+The DAPL instances would act as clients of the daemon server and
+communicate with the daemon through the various IPC mechanisms
+available on Linux: Unix sockets, TCP/IP sockets, System V message
+queues, FIFOs, or RPCs.
+
+As with the file system based database, process crashes can potentially
+cause database corruption.
+
+While the portability of this implementation will depend on the chosen
+IPC mechanism, this approach will be at best Unix centric and possibly
+Linux specific. 
+
+The database interface could be implemented as follows:
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_init
+ Inputs: 
+
+ Outputs:
+
+initialize IPC mechanism
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_exit
+ Inputs: 
+
+ Outputs:
+
+shutdown IPC mechanism
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_insert 
+ Inputs: 
+         cookie
+ Outputs:
+
+if send insert message for cookie fails
+   return error 
+
+if receive insert response message fails
+   return error
+
+if insert success
+   return success
+else return error
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_update 
+ Inputs: 
+         cookie
+         mr_handle
+
+ Outputs:
+ 
+if send update message for cookie and mr_handle fails
+   return error
+else return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_query 
+ Inputs: 
+         cookie
+
+ Outputs:
+         mr_handle
+
+if send query message for cookie fails
+   return error
+
+else if receive query response message with mr_handle fails
+   return error 
+
+else return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_dec 
+ Inputs: 
+         cookie
+ Outputs:
+
+if send decrement message for cookie fails
+   return error
+else return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+ Shared Memory Database
+ ----------------------
+
+The database could be maintained in an area of memory shared by all
+DAPL instances running on a system. Linux supports the System V shared
+memory functions shmget(2), shmctl(2), shmat(2), and shmdt(2). A hard
+coded key_t value could be used so that each DAPL instance attached to
+the same piece of shared memory. The size of the database would be
+constrained by the size of the shared memory region. Synchronization
+could be achieved by using atomic operations targeting memory in the
+shared region.
+
+Such a design would suffer from the corruption problems described
+above. If a process crashed there would be no easy way to clean up its
+locks and roll back the database to a consistent state.
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_init
+ Inputs: 
+
+ Outputs:
+
+attach shared region
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_exit
+ Inputs: 
+
+ Outputs:
+
+detach shared region
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_insert 
+ Inputs: 
+         cookie
+ Outputs:
+
+lock database
+
+if db does not contain cookie 
+   add record for cookie
+
+unlock database
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_update 
+ Inputs: 
+         cookie
+         mr_handle
+ Outputs:
+ 
+lock database
+
+if db contains cookie 
+   update record's mr_handle
+
+unlock database
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_query 
+ Inputs: 
+         cookie
+
+ Outputs:
+         mr_handle
+
+lock database
+
+if db contains cookie 
+   set mr_handle to record's value
+   increment record's reference count
+
+unlock database
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_dec 
+ Inputs: 
+         cookie
+ Outputs:
+
+lock database
+
+if db contains cookie 
+   decrement record's reference count
+
+   if reference count is 0
+      remove record
+
+unlock database
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+ Kernel Module Database
+ ----------------------
+
+If the DAT library were integrated with an HCA vendor's software
+stack, the database could be managed by the HCA driver. Placing the
+database in the kernel would alleviate the synchronization problems
+posed by multiple processes. Since memory registration operations
+already involve a transition into the kernel, no extra overhead would
+be incurred by this design.
+
+The RI could include a kernel module with this functionality as a
+temporary solution. The module could identify itself as a character
+device driver and communicate with user level processes through an
+ioctl(2). The driver could also create an entry in the proc file
+system to display the database's contents for diagnostic purposes.
+
+A major benefit of a kernel based implementation is that the database
+can remain consistent even in the presence of application
+errors. Since DAPL instances communicate with the driver by means of
+ioctl(2) calls on a file, the driver can be arrange to be informed
+when the file is closed and perform any necessary actions. The driver
+is guaranteed to be notified of a close regardless of the manner in
+which the process exits. 
+
+The database could be implemented as a dictionary using the LMR cookie
+values as keys. 
+
+The following pseudo-code describes the functions needed by the kernel
+module and the database interface.
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: KernelModuleInit
+ Inputs: 
+
+ Outputs:
+
+dictionary = create_dictionary()
+create_proc_entry()
+create_character_device_entry()
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: KernelModuleExit
+ Inputs: 
+
+ Outputs:
+
+remove_character_device_entry()
+remove_proc_entry()
+fee_dictionary(dictionary)
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: DeviceOpen
+ Inputs: 
+         file
+
+ Outputs:
+
+dev_data = allocate device data
+
+file->private_data = dev_data
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: DeviceClose
+ Inputs: 
+         file
+
+ Outputs:
+
+dev_data = file->private_data 
+
+for each record in dev_data
+{
+    RecordDecIoctl
+}
+
+deallocate dev_data
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: RecordInsertIoctl
+ Inputs: 
+         file
+         cookie
+
+ Outputs:
+
+lock dictionary
+
+if cookie is not in dictionary 
+   insert cookie into dictionary
+   
+
+unlock dictionary
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: RecordUpdateIoctl
+ Inputs: 
+         file
+         cookie
+         mr_handle
+
+ Outputs:
+
+dev_data = file->private_data
+
+lock dictionary
+
+if cookie is in dictionary 
+   add record reference to dev_data
+   update mr_handle 
+
+unlock dictionary
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: RecordQueryIoctl
+ Inputs: 
+         file
+         cookie
+
+ Outputs:
+        mr_handle
+
+dev_data = file->private_data
+
+lock dictionary
+
+if cookie is in dictionary 
+   add record reference to dev_data
+   retrieve mr_handle
+
+unlock dictionary
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: RecordDecIoctl
+ Inputs: 
+         file
+         cookie
+
+ Outputs:
+
+dev_data = file->private_data
+remove record reference from dev_data
+
+lock dictionary
+
+if cookie is in dictionary 
+   decrement reference count
+   if reference count is 0
+      remove record
+
+unlock dictionary
+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_init
+ Inputs: 
+
+ Outputs:
+
+fd = open device file
+
+if fd is invalid 
+   return error
+else 
+   return success
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_exit
+ Inputs: 
+
+ Outputs:
+
+close fd
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_insert 
+ Inputs: 
+         cookie
+ Outputs:
+
+ioctl on fd
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_update 
+ Inputs: 
+         cookie
+         mr_handle
+ Outputs:
+ 
+ioctl on fd
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_query 
+ Inputs: 
+         cookie
+
+ Outputs:
+         mr_handle
+
+ioctl on fd
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ Function: dapls_mrdb_record_dec 
+ Inputs: 
+         cookie
+ Outputs:
+
+ioctl on fd
+
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+

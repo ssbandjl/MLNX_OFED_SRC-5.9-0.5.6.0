@@ -1,0 +1,40 @@
+Source: dapl
+Priority: extra
+Section: net
+Maintainer: Tzafrir Cohen <tzafrir@debian.org>
+Build-Depends: debhelper (>= 7), autotools-dev,  librdmacm-dev ,libibverbs-dev (>=1.1.2), libtool, automake
+Standards-Version: 3.8.4
+Homepage: http://www.openfabrics.org
+
+Package: libdapl-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libdapl2 (= ${binary:Version})
+Description: Development files for the DAPL libraries
+ The Direct Access Programming Library (DAPL) is a transport-independent,
+ platform-independent API that supports Remote Direct Memory Access (RDMA) 
+ devices such as Infiniband and iWARP .
+ .
+ This package contains the header files and shared libraries for building
+ applications against libdapl.
+
+Package: libdapl2
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libibverbs1 (>=1.1.2)
+Description: The Direct Access Programming Library (DAPL)
+ The Direct Access Programming Library (DAPL) is a transport-independent,
+ platform-independent API that supports Remote Direct Memory Access (RDMA)
+ devices such as Infiniband and iWARP .
+  .
+ This package contains the libdapl shared library.
+
+Package: dapl2-utils
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libibverbs1 (>=1.1.2)
+Description: Utilities for use with the DAPL libraries
+ The Direct Access Programming Library (DAPL) is a transport-independent,
+ platform-independent API that supports Remote Direct Memory Access (RDMA)
+ devices such as Infiniband and iWARP .
+ .
+ This package contains example utilities that use the DAPL API.

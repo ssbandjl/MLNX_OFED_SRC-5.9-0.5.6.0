@@ -1,0 +1,15 @@
+KNEM 1.1.4.90mlnx1
+Copyright © Inria 2009-2014 (see AUTHORS file)
+
+
+
+The kernel driver source code (driver/linux/knem_main.c and knem_hal.h)
+is distributed under the GNU General Public License version 2.0
+(see COPYING.GPL-2).
+Everything else is distributed under the BSD-3 license
+(see COPYING.BSD-3).
+
+
+Function knem_dma_async_memcpy_pg_to_pg() in driver/linux/knem_hal.h is
+Copyright(c) 2004 - 2006 Intel Corporation. All rights reserved.
+It was taken from Linux kernel before its removal in 3.18.

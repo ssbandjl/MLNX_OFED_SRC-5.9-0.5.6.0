@@ -1,0 +1,36 @@
+!if $(FREEBUILD)
+TARGETNAME=dat2
+!else
+TARGETNAME=dat2d
+!endif
+TARGETPATH=..\..\..\..\bin\user\obj$(BUILD_ALT_DIR)
+TARGETTYPE=DYNLINK
+DLLENTRY=_DllMainCRTStartup
+!if $(_NT_TOOLS_VERSION) == 0x700
+DLLDEF=$O\udat_exports.def
+!else
+DLLDEF=$(OBJ_PATH)\$O\udat_exports.def
+!endif
+USE_MSVCRT=1
+
+SOURCES=udat.rc			\
+	udat.c			\
+	udat_api.c		\
+	udat_sr_parser.c	\
+	udat_sources.c
+
+INCLUDES=windows;..\common;..\include;..\..\..\..\inc\user\linux;
+RCOPTIONS=/I..\..\..\..\inc;
+
+# FIX ME!!! XXX specifically the 4113 warning prior to testing.
+#MSC_WARNING_LEVEL= /W3
+
+MSC_WARNING_LEVEL= /W1 /wd4113
+
+DAT_OPTS= $(DAT_OPTS) -DEXPORT_DAT_SYMBOLS -DDAT_EXTENSIONS=1
+
+USER_C_FLAGS=$(USER_C_FLAGS) $(DAT_OPTS) $(MSC_WARNING_LEVEL)
+
+TARGETLIBS= \
+	$(SDK_LIB_PATH)\kernel32.lib
+

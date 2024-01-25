@@ -1,0 +1,6 @@
+#!/bin/sh
+
+getent group rdma >/dev/null 2>&1 || groupadd -r rdma
+touch /etc/udev/rules.d/10-knem.rules
+
+exit 0

@@ -1,0 +1,1 @@
+DIRS = ibal openib_common openib_scm openib_cma openib_ucm 

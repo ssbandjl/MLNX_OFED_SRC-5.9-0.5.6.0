@@ -1,0 +1,34 @@
+Source: knem
+Section: kernel
+Priority: optional
+Maintainer: Brice Goglin <Brice.Goglin@inria.fr>
+Build-Depends: debhelper (>= 9.0.0), dh-autoreconf, bzip2, pkg-config
+Standards-Version: 4.0
+Homepage: http://runtime.bordeaux.inria.fr/knem/
+
+Package: knem
+Architecture: any
+Depends: pkg-config, ${misc:Depends}
+Description: userspace tools for the KNEM kernel module
+ KNEM is a Linux kernel module enabling high-performance intra-node MPI
+ communication for large messages. KNEM offers support for asynchronous
+ and vectorial data transfers as well as offloading memory copies on to
+ Intel I/OAT hardware. See http://runtime.bordeaux.inria.fr/knem/ for
+ details.
+ .
+ This package provides the userspace tools required to use the knem kernel
+ modules.
+
+Package: knem-modules
+Section: kernel
+Architecture: any
+Depends: ${misc:Depends}
+Recommends: knem
+Description: kernel module for high-performance intra-node MPI communication for large messages
+ KNEM is a Linux kernel module enabling high-performance intra-node MPI
+ communication for large messages. KNEM offers support for asynchronous
+ and vectorial data transfers as well as offloading memory copies on to
+ Intel I/OAT hardware. See http://runtime.bordeaux.inria.fr/knem/ for
+ details.
+ .
+ This package includes pre-built kernel modules.

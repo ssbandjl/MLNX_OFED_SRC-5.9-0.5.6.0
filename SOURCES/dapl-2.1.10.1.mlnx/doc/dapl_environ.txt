@@ -1,0 +1,42 @@
+		DAPL Environment Guide v. 0.01
+                ------------------------------
+
+The following environment variables affect the behavior of the DAPL
+provider library: 
+
+
+DAPL_DBG_TYPE
+-------------
+
+ Value specifies which parts of the registry will print debugging
+ information, valid values are  
+
+    DAPL_DBG_TYPE_ERR		= 0x0001
+    DAPL_DBG_TYPE_WARN		= 0x0002
+    DAPL_DBG_TYPE_EVD		= 0x0004
+    DAPL_DBG_TYPE_CM		= 0x0008
+    DAPL_DBG_TYPE_EP		= 0x0010
+    DAPL_DBG_TYPE_UTIL		= 0x0020
+    DAPL_DBG_TYPE_CALLBACK	= 0x0040
+    DAPL_DBG_TYPE_DTO_COMP_ERR  = 0x0080
+    DAPL_DBG_TYPE_API           = 0x0100
+    DAPL_DBG_TYPE_RTN           = 0x0200
+    DAPL_DBG_TYPE_EXCEPTION     = 0x0400
+
+ or any combination of these. For example you can use 0xC to get both 
+ EVD and CM output.
+
+ Example setenv DAPL_DBG_TYPE 0xC
+
+  
+DAPL_DBG_DEST
+-------------
+
+ Value sets the output destination, valid values are 
+  
+    DAPL_DBG_DEST_STDOUT     	= 0x1
+    DAPL_DBG_DEST_SYSLOG     	= 0x2 
+    DAPL_DBG_DEST_ALL        	= 0x3 
+  
+ For example, 0x3 will output to both stdout and the syslog. 
+

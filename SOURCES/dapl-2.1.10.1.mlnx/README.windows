@@ -1,0 +1,190 @@
+[10-17-07] Last update.
+
+==========
+BUILD:
+==========
+
+The default build includes both debug(checked) & non-debug (free) version of
+dat2d.dll and dapl2d.dll uDAPL provider, free versions are dat2.dll & dapl2.dll.
+Included in the build are test suites dtest (simple DAT example), dtestx
+(DAT IB extensions test) and the main DAT/uDAPL tester dapl2test (see dt-svr &
+dt-cli, see manual.htm for details).
+Additionally, DAT v1.1 and/or DAT v2.0 build environments can be installed; see
+manual.htm for details.
+
+Building a free/non-debug version:
+----------------------------------
+Requires Windows Server 2003 DDK & Platform SDK.
+From a DDK command window (free build) for a specific architecture
+(x86, x64, ia64);
+
+cd gen1\trunk\ulp\dapl2
+build -wg
+Binaries are located in gen1\bin\{kernel|user}\os-arch-folder\...
+
+Building debug version:
+-----------------------
+Same as above except the DDK command window is for a Checked build
+
+
+Installing:
+-----------
+
+dat2.dll & dapl.dll --> %SystemRoot%
+
+===================
+CONFIGURATION:
+===================
+
+sample C:\dat\dat.conf 
+
+#
+# DAT 1.2 configuration file,
+#
+# Each entry should have the following fields:
+#
+# <ia_name> <api_version> <threadsafety> <default> <lib_path> \
+#           <provider_version> <ia_params> <platform_params>
+#
+# For openib-cma provider you can specify <ia_params> as either:
+# 	network address, network hostname, or netdev name and 0 for port
+#
+#
+ibnic0v2 u2.0 nonthreadsafe default C:\Windows\dapl2.dll ri.2.0 "IbalHca0 1" ""
+
+
+=============================
+Bugs/Known issues
+=============================
+
+
+
+=============================
+4.0 SAMPLE uDAPL APPLICATION:
+=============================
+
+There are 2 sample programs provided with this package.
+
+(dapl2/test/dtest/)
+(dapl2/test/dtestx/)
+
+NAME
+      dtest - simple uDAPL send/receive and RDMA test
+
+SYNOPSIS
+      dtest [-P provider] [-b buf size] [-B burst count][-v] [-c] [-p] [-d] [-s]
+
+      dtest [-P provider] [-b buf size] [-B burst count][-v] [-c] [-p] [-d] [-h HOSTNAME]
+
+DESCRIPTION
+      dtest  is a simple test used to exercise and verify the uDAPL interfaces.
+      At least two instantiations of the test must be run. One acts as the
+      server and the other the client. The server side of the test listens for
+      connection requests, until timing out or killed. Upon receipt of a cd
+      connection request, the connection is established, the server and client
+      sides exchange information necessary to perform RDMA writes and reads.
+
+OPTIONS
+       -P=PROVIDER
+          use PROVIDER to specify uDAPL interface using C:\DAT\dat.conf
+          (default ibnic0v2)
+
+       -b=BUFFER_SIZE
+          use buffer size BUFFER_SIZE for RDMA(default 64)
+
+       -B=BURST_COUNT
+          use busrt count BURST_COUNT for interations (default 10)
+
+       -v, verbose output(default off)
+
+       -c, use consumer notification events (default off)
+
+       -p, use polling (default wait for event)
+
+       -d, delay in seconds before close (default off)
+
+       -s, run as server (default - run as server)
+
+       -h=HOSTNAME
+          use HOSTNAME to specify server hostname or IP address (default - none)
+
+EXAMPLES
+       dtest -v -s
+           Starts a server process with debug verbosity using provider ibnic0v2
+
+       dtest -h server1-ib0
+
+           Starts a client process, using ibnic0v2 provider to connect to
+           hostname server1-ib0.
+
+SEE ALSO
+       dapltest(1)
+
+AUTHORS
+       Arlin Davis
+              <ardavis@ichips.intel.com>
+
+BUGS
+
+/dapl/test/dapltest/
+
+NAME
+        dapltest - test for the Direct Access Programming Library (DAPL)
+
+DESCRIPTION
+       Dapltest  is  a  set  of tests developed to exercise, characterize, and
+       verify the DAPL interfaces during development and porting. At least two
+       instantiations of the test must be run. One acts as the server, fielding
+       requests and spawning server-side test threads as needed. Other client(s)
+       connect to the server and issue test requests. The server side of the
+       test, once  invoked, listens  continuously for client connection requests
+       until stopped or killed. Upon receipt of a connection request, the
+       connection is established, the server and client sides swap version
+       numbers to  verify that they are able to communicate, and the client
+       sends the test request to the server. If the version numbers match, and
+       the test request is well-formed, the server spawns  the  threads
+       needed to run the test before awaiting further connections.
+
+USAGE
+       See manual.htm and or dt-svr.bat & dt-cli.bat.
+
+EXAMPLES
+       dapltest -T S -d -D ibnic0v2
+
+           Starts a server process with debug verbosity.
+
+       dapltest -T T -d -s host1-ib0 -D ibnic0v2 -i 100 client SR 4096 2 \
+           server SR 4096 2
+
+           Runs a transaction test, with both sides sending one buffer with
+           two 4KB segments, one hundred times.
+
+       dapltest -T P -d -s host1-ib0 -D ibnic0v2 -i 100 SR 4096 2
+
+           Runs a performance test, with the client sending one buffer with
+           two 4KB segments, one hundred times.
+
+       dapltest -T Q -s host1-ib0 -D ibnic0v2
+
+           Asks the server to clean up and exit.
+
+       dapltest -T L -D ibnic0v2 -d -w 16 -m 1000
+
+           Runs all of the limit tests, setting up 16 complete sets of DAPL
+           objects, and creating at most a thousand instances when trying to
+           exhaust resources.
+
+       dapltest -T T -V -d -t 2 -w 4 -i 55555 -s linux3 -D ibnic0v2 \
+           client RW 4096 1 server RW  2048  4 client SR 1024 4 server SR 4096 \
+           2 client SR 1024 3 -f server SR 2048 1 -f
+
+           Runs a more complicated transaction test, with two thread using four
+           EPs each, sending a more complicated buffer pattern for a larger
+           number of iterations, validating the data received.
+
+       BUGS   (and To Do List)
+
+           Use of CNOs (-Q) is not yet supported.
+
+           Further limit tests could be added.
+

@@ -1,0 +1,5 @@
+sockperf (3.10-0.git5ebd327da983.59056) release; urgency=low
+
+  * Initial Release.
+
+ -- Mellanox Technologies Ltd. <support@mellanox.com>  Wed, 21 Sep 2022 18:53:51 +0300

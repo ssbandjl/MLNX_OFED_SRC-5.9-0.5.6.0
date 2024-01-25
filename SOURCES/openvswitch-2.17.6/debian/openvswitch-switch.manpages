@@ -1,0 +1,13 @@
+debian/build/ovsdb/ovsdb-server.1
+debian/build/ovsdb/ovsdb-server.5
+debian/build/ovsdb/ovsdb.local-config.5
+debian/build/Documentation/_build/man/ovs-ctl.8
+debian/build/utilities/ovs-dpctl-top.8
+debian/build/utilities/ovs-dpctl.8
+utilities/ovs-kmod-ctl.8
+debian/build/utilities/ovs-pcap.1
+debian/build/Documentation/_build/man/ovs-tcpdump.8
+debian/build/Documentation/_build/man/ovs-tcpundump.1
+debian/build/utilities/ovs-vsctl.8
+debian/build/vswitchd/ovs-vswitchd.8
+debian/build/vswitchd/ovs-vswitchd.conf.db.5

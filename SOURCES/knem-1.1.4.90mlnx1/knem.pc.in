@@ -1,0 +1,9 @@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+includedir = @includedir@
+
+Name: @PACKAGE@
+Description: High-performance intra-node MPI communication for large messages
+Version: @VERSION@
+Cflags: -I${includedir} 

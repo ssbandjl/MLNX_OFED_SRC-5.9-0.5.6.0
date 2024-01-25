@@ -1,0 +1,356 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+ "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+<!--
+ Copyright © inria 2009-2013
+ Brice Goglin <Brice.Goglin@inria.fr>
+
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ 3. The name of the author may not be used to endorse or promote products
+    derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+ <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+ <title>KNEM: Fast Intra-Node MPI Communication</title>
+ <link rel="stylesheet" type="text/css" href="../style.css" />
+</head>
+
+<body>
+
+<h1><a href="..">KNEM</a></h1>
+<h1 class="sub">Interface Documentation</h1>
+
+
+
+<hr class="main" />
+
+<p><em>
+ See also the <a href="knem.html">main documentation</a> for more information
+ about installing, starting and using KNEM.
+</em></p>
+
+<hr class="main" />
+
+<p><em>
+ See <a href="https://gitlab.inria.fr/knem/knem/-/blob/master/common/knem_io.h">knem_io.h</a>
+ for more details about the interface.
+ This header file also explains how to port from the old KNEM interface to the new one.
+</em></p>
+
+<hr class="main" />
+
+
+
+<div class="section">
+<h3>Interface Basics</h3>
+<p>
+ Once loaded, the KNEM kernel module creates a <tt>/dev/knem</tt> pseudo-character device
+ (see the <a href="knem.html">main documentation</a> for details about granting access rights to this file).
+ <b>Applications must open this file (in read/write mode) before passing commands to the driver</b>.
+</p>
+<pre>
+  #include &lt;knem_io.h&gt;
+
+  ...
+  knem_fd = open(KNEM_DEVICE_FILENAME, O_RDWR);
+</pre>
+</div>
+
+
+<div class="section">
+<h3>Preparing remote access to a local memory region</h3>
+<p>
+ To prepare access to local memory from another process,
+ <b>declare a memory region</b>
+ (composed of one or several segments) and pass it to the driver.
+</p>
+<pre>
+  struct knem_cmd_create_region create;
+  struct knem_cmd_param_iovec knem_iov[2];
+  ...
+  knem_iov[0].base = &lt;myaddress&gt;
+  knem_iov[0].len = &lt;mylength&gt;
+  knem_iov[1].base = &lt;myotheraddress&gt;
+  knem_iov[1].len = &lt;myotherlength&gt;
+  ...
+  create.iovec_array = (uintptr_t) &knem_iov[0];
+  create.iovec_nr = 2;
+  create.flags = KNEM_FLAG_SINGLEUSE; /* automatically destroy after first use */
+  create.protection = PROT_READ; /* only allow remote readers */
+  err = ioctl(knem_fd, KNEM_CMD_CREATE_REGION, &create);
+</pre>
+<p>
+ The region has been stored in the driver and associated to a 64bits cookie
+ whose value is now available in <tt>create.cookie</tt>.
+</p>
+</div>
+
+
+<div class="section">
+<h3>Accessing a remote memory region</h3>
+<p>
+ Once the region creation returned a cookie,
+ the application may <b>pass this cookie to the receiver</b>
+ (using another way of communication).
+ The receiver process then <b>passes its own array of destination memory segments</b>
+ (where data should be copied to)
+ to the driver along with the corresponding remote cookie.
+</p>
+<pre>
+  struct knem_cmd_inline_copy icopy;
+  struct knem_cmd_param_iovec knem_iov[5];
+  ...
+  knem_iov[0].base = &lt;myaddress&gt;
+  knem_iov[0].len = &lt;mylength&gt;
+  ... setup others knem_iovs as well ...
+  knem_iov[4].base = &lt;myfifthaddress&gt;
+  knem_iov[4].len = &lt;myfifthlength&gt;
+  ...
+  icopy.local_iovec_array = (uintptr_t) &knem_iov[0];
+  icopy.local_iovec_nr = 5;
+  icopy.remote_cookie = &lt;myremotecookie&gt;;
+  icopy.remote_offset = 0;
+  icopy.write = 0; /* read from the remote region into our local segments */
+  icopy.flags = 0;
+  err = ioctl(knem_fd, KNEM_CMD_INLINE_COPY, &icopy);
+</pre>
+<p>
+ If the ioctl succeeds (return 0), it means that the copy was properly initialized.
+ In case of error during the copy (as opposed to during its initialization),
+ it is reported in the request status.
+ In this example, the request is processed synchronously.
+ The status is then available immediately in <tt>icopy.current_status</tt>.
+</p>
+<pre>
+  if (icopy.current_status != KNEM_STATUS_SUCCESS)
+    printf("request failed\n");
+</pre>
+<p>
+ It is also possible to initiate a data transfer using a declared
+ region.
+</p>
+<pre>
+  struct knem_cmd_copy copy;
+  struct knem_cmd_create_region create;
+  struct knem_cmd_param_iovec knem_iov[3];
+  ...
+  knem_iov[0].base = &lt;myaddress&gt;
+  knem_iov[0].len = &lt;mylength&gt;
+  ... setup the other knem_iov as well ...
+  knem_iov[2].base = &lt;mythirdaddress&gt;
+  knem_iov[2].len = &lt;mythirdlength&gt;
+  ...
+  create.iovec_array = (uintptr_t) &knem_iov[0];
+  create.iovec_nr = 3;
+  create.flags = KNEM_FLAG_SINGLEUSE; /* automatically destroy after first use */
+  create.protection = PROT_WRITE; /* only writers */
+  err = ioctl(knem_fd, KNEM_CMD_CREATE_REGION, &create);
+  ...
+  copy.src_cookie = &lt;myremotecookie&gt;; /* read from the other process */
+  copy.src_offset = 0;
+  copy.dst_cookie = &lt;create.cookie&gt;; /* write in our local region */
+  copy.dst_offset = 0;
+  copy.flags = 0;
+  err = ioctl(knem_fd, KNEM_CMD_COPY, &amp;copy);
+</pre>
+</div>
+
+
+<div class="section">
+<h3>Reusing memory regions multiple times</h3>
+<p>
+ The above code tells the driver to destroy the memory region after its first use
+ because of <tt>KNEM_FLAG_SINGLEUSE</tt>.
+ It is possible to keep the region available after use by removing this flag
+ at region creation (just set <tt>create.flags</tt> to 0 before the ioctl).
+ The region will then be accessible multiple times by any KNEM process.
+ It will only be destroyed when the owner process exits or when it
+ explicitly destroys it:
+</p>
+<pre>
+  err = ioctl(knem_fd, KNEM_CMD_DESTROY_REGION, &&lt;mycookie&gt;);
+</pre>
+</div>
+
+
+<div class="section">
+<h3>Asynchronous requests</h3>
+<p>
+ By default, KNEM processes requests synchronously, which means the
+ above <tt>current_status</tt> will be set as soon as the ioctl returns.
+ It is also possible to perform <b>asynchronous data transfers</b> through
+ a kernel thread by adding the corresponding flag in the receive ioctl:
+</p>
+<pre>
+  icopy.flags = KNEM_FLAG_MEMCPYTHREAD;
+</pre>
+<p>
+ Such an asynchronous request will show <tt>KNEM_STATUS_PENDING</tt>
+ in <tt>current_status</tt>. It means that further polling is required
+ to know when the request actually completes in the background.
+ To do so, the ioctl must specify where the asynchronous status should be updated:
+</p>
+<pre>
+  icopy.async_status_index = &lt;myindex&gt;;
+</pre>
+ It is an index within an array of status slots that should be allocated
+ at initialization by mapping the device file.
+ This array may be mapped only once per file descriptor,
+ but its size may be freely chosen by the application
+ (depending on how many simultaneous pending requests it may need,
+  up to 2^32 status slots).
+</p>
+<pre>
+  static volatile knem_status_t *knem_status;
+  #define KNEM_STATUS_NR 4096
+  ...
+  knem_status = mmap(NULL, KNEM_STATUS_NR, PROT_READ|PROT_WRITE, MAP_SHARED, knem_fd, KNEM_STATUS_ARRAY_FILE_OFFSET);
+  ...
+</pre>
+<p>
+ When submitting a request with <tt>async_status_index = N</tt>,
+ the application may be notified of the completion by looking at
+ the corresponding index in the <tt>knem_status</tt> array.
+ The driver takes care of automatically freeing the corresponding
+ sender and receiver resources.
+ Note that you should always check the <tt>current_status</tt> first,
+ since some requests might be processed synchronously in case of
+ missing features in the driver.
+</p>
+<pre>
+  if (icopy.current_status != KNEM_STATUS_PENDING) {
+    /* completed synchronously */
+    if (icopy.current_status != KNEM_STATUS_SUCCESS)
+      printf("request failed\n");
+  } else {
+    /* processed asynchronously, waiting for completion */
+    while (knem_status[&lt;myindex&gt;] == KNEM_STATUS_PENDING);
+    /* completed asynchronously */
+    if (knem_status[&lt;myindex&gt;] != KNEM_STATUS_SUCCESS)
+      printf("request failed\n");
+  }
+</pre>
+<p>
+ Again, initialization problems (synchronous) are reported in the
+ ioctl return value, while actual copy issues (during the asynchronous
+ processing) are reported in the request status, either
+ <tt>current_status</tt> one or later in the asynchronous one.
+</p>
+</div>
+
+
+<div class="section">
+<h3>I/OAT copy offload through DMA Engine</h3>
+<p>
+ One interesting asynchronous feature is certainly <b>I/OAT copy offload</b>.
+</p>
+<pre>
+  icopy.flags = KNEM_FLAG_DMA;
+</pre>
+<p>
+ If DMA engine is not supported by the kernel or the hardware, setting this flag
+ will cause the ioctl to fail.
+ To know if DMA is supported, you may get information about the driver
+ and check its feature flags:
+</p>
+<pre>
+  struct knem_cmd_info info;
+  ...
+  err = ioctl(knem_fd, KNEM_CMD_GET_INFO, &info);
+  if (info.features & KNEM_FEATURE_DMA)
+    printf("DMA engine is supported\n");
+</pre>
+<p>
+ The ultimate strategy is to enable overlapping of data transfer
+ with computation by using an <b>asynchronous data transfer with I/OAT</b>.
+ The aforementioned while loop will thus not return immediately and
+ the application may perform useful work before the request is actually done.
+</p>
+<pre>
+  icopy.flags = KNEM_FLAG_DMA | KNEM_FLAG_ASYNCDMACOMPLETE;
+</pre>
+<p>
+ If DMA does not seem to work (for instance if KNEM_FEATURE_DMA is missing in <tt>info.features</tt>),
+ you may want to check DMA engine status in the driver:
+</p>
+<pre>
+  $ cat /dev/knem
+  [...]
+   DMAEngine: KernelSupported Enabled ChansAvail ChunkMin=1024B
+</pre>
+<p>
+ The above line	means that DMA Engine is supported by the kernel, enabled in
+ KNEM and that some DMA channels are available.
+ <i>NoKernelSupport</i> would mean that DMA Engine support is missing in the kernel.
+ <i>NoChannelAvailable</i> would means that DMA Engine is supported by the kernel
+ but no hardware DMA engine is available or no driver was loaded to use it.
+ On Intel machines, loading the <tt>ioatdma</tt> kernel module will usually help.
+</p>
+</div>
+
+
+<div class="section">
+<h3>Blocking support</h3>
+<p>
+ Starting with KNEM 1.1, asynchronous request completions may be
+ notified through the KNEM file descriptor.
+ When the <tt>KNEM_FLAG_NOTIFY_FD</tt> is added to an asynchronous
+ copy request, its completion queues an event in the descriptor.
+ This event may be read as a <tt>uint32_t</tt> that contains the request
+ <tt>async_status_index</tt>.
+ The file descriptor also supports <tt>poll()</tt>/<tt>select()</tt>.
+ Blocking and non-blocking file descriptors are both supported.
+</p>
+<pre>
+  /* submit a asynchronous copy request */
+  ...
+  copy.flags = KNEM_FLAG_MEMCPYTHREAD | KNEM_FLAG_NOTIFY_FD;
+  copy.async_status_index = 7;
+  err = ioctl(knem_fd, KNEM_CMD_COPY, &amp;copy);
+  ...
+  /* sleep indefinitely until the request completes */
+  int err;
+  struct pollfd p;
+  p.fd = knem_fd;
+  p.events = POLLIN;
+  err = poll(&p, 1, -1);
+  /* poll was woken up, something likely happened in the knem file descriptor */
+  if (err > 0 && (p.revents &amp; POLLIN)) {
+    uint32_t index;
+    err = read(knem_fd, &amp;index, sizeof(index));
+    /* index now contains 7 (the async_status_index passed in the copy request) */
+    /* status slot 7 is set to KNEM_STATUS_SUCCESS or (FAILED) */
+  }
+</pre>
+
+
+<hr class="main" />
+
+
+
+<p class="updated">
+ Last updated on 2013/03/13.
+</p>
+
+</body>
+</html>

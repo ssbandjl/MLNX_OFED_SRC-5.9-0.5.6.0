@@ -1,0 +1,56 @@
+!if $(FREEBUILD)
+TARGETNAME = dapl2
+!else
+TARGETNAME = dapl2d
+!endif
+
+TARGETPATH = ..\..\..\..\bin\user\obj$(BUILD_ALT_DIR)
+TARGETTYPE = DYNLINK
+DLLENTRY = _DllMainCRTStartup
+
+!if $(_NT_TOOLS_VERSION) == 0x700
+DLLDEF=$O\udapl_exports.def
+!else
+DLLDEF=$(OBJ_PATH)\$O\udapl_exports.def
+!endif
+
+USE_MSVCRT = 1
+
+SOURCES=udapl.rc			\
+	..\dapl_common_src.c	\
+	..\dapl_udapl_src.c		\
+	dapl_ibal_cm.c			\
+	dapl_ibal_cq.c			\
+	dapl_ibal_extensions.c	\
+	dapl_ibal_name_service.c\
+	dapl_ibal_qp.c			\
+	dapl_ibal_util.c
+
+INCLUDES = ..\include;..\common;..\..\dat\include;\
+		   ..\..\dat\udat\windows;..\udapl\windows;\
+		   ..\..\..\..\inc;..\..\..\..\inc\user;..\..\..\..\inc\user\linux;
+
+DAPL_OPTS = -DEXPORT_DAPL_SYMBOLS -D_VENDOR_IBAL_ -DDAPL_MERGE_CM_DTO\
+			-DDAT_EXTENSIONS
+
+USER_C_FLAGS=$(USER_C_FLAGS) $(DAPL_OPTS)
+!if !$(FREEBUILD)
+USER_C_FLAGS=$(USER_C_FLAGS) -DDAPL_DBG #-DDAPL_COUNTERS
+!endif
+
+TARGETLIBS= \
+	$(SDK_LIB_PATH)\kernel32.lib \
+	$(SDK_LIB_PATH)\ws2_32.lib \
+!if $(FREEBUILD)
+	$(TARGETPATH)\*\dat2.lib \
+	$(TARGETPATH)\*\complib.lib \
+	$(TARGETPATH)\*\ibal.lib
+!else
+	$(TARGETPATH)\*\dat2d.lib \
+	$(TARGETPATH)\*\complibd.lib \
+	$(TARGETPATH)\*\ibald.lib
+!endif
+
+# FIX ME ASAP
+#MSC_WARNING_LEVEL= /W3
+MSC_WARNING_LEVEL= /W1 /wd4113

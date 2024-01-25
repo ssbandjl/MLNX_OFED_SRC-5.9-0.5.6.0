@@ -1,0 +1,136 @@
+dapl (2.1.10.1.mlnx-OFED.4.9.0.1.5.59056) unstable; urgency=medium
+
+  * Include upstream reproducible builds fix, that is included in the
+    Debian / Ubuntu version 2.1.10.1.f1e05b7a.
+  * Bump version number to a slightly higher one.
+
+ -- Tzafrir Cohen <tzafrir@debian.org>  Mon, 04 May 2020 16:48:22 +0300
+
+dapl (2.1.10mlnx-2) unstable; urgency=low
+
+  * Release 2.1.10mlnx-1
+
+ -- Alaa Hleihel <alaa@mellanox.com>  Mon, 02 Jan 2017 11:58:30 +0200
+
+dapl (2.1.9mlnx-2) unstable; urgency=low
+
+  * Release 2.1.9-2
+
+ -- Alaa Hleihel <alaa@mellanox.com>  Sun, 01 May 2016 11:58:30 +0200
+
+dapl (2.1.9mlnx-1) unstable; urgency=low
+
+  * Release 2.1.9
+
+ -- Alaa Hleihel <alaa@mellanox.com>  Wed, 20 Apr 2016 14:13:30 +0200
+
+dapl (2.1.7mlnx-1) unstable; urgency=low
+
+  * Release 2.1.7
+
+ -- Arlin Davis <arlin.r.davis@intel.com> Mon, 26 Oct 2015 17:46:14 +0200
+
+dapl (2.1.6mlnx-1) unstable; urgency=low
+
+  * Release 2.1.6
+
+ -- Arlin Davis <arlin.r.davis@intel.com> Sun, 31 Aug 2015 17:46:14 +0200
+
+dapl (2.1.5mlnx-1) unstable; urgency=low
+
+  * Release 2.1.5
+
+ -- Arlin Davis <arlin.r.davis@intel.com> Thu, 27 May 2015 11:18:14 +0200
+
+dapl (2.1.4mlnx-1) unstable; urgency=low
+
+  * Release 2.1.1
+  * common: add provider name to log messages
+  * mpxyd: log warning message if numa_node invalid
+  * rpm spec: don't fail if mpxyd is missing.
+
+ -- Arlin Davis <arlin.r.davis@intel.com> Thu, 14 Aug 2014 10:10:14 +0200
+
+dapl (2.1.0mlnx1-1) unstable; urgency=low
+
+  * include debuginfo with build
+  * mpxyd: tx thread doesn't sleep during no pending IO state
+  * mpxyd: change MIC cpu_mask to per numa node instead of adapter
+  * mpxyd: set to MXS mode if device numa_node is invalid (-1)
+  * mpxyd: MXS based alltoall benchmark hangs or returns post_send timeout
+  * mpxyd: add IO profile capabilities to help debug alltoall stall cases
+  * mpxyd: retry stalled inline post_send, init m_idx only when signaled
+  * Release 2.1.0
+  * build: add missing NEWS file
+  * update autogen.sh
+  * Add MCM provider and MPXYD service to build
+  * mpxyd: service startup script and configuration file
+  * add readme for MCM provider and MPXYD service
+  * update Copyright dates
+  * Add new MIC RDMA proxy service daemon (MPXYD)
+  * add new dapl MIC provider (MCM) to support MIC RDMA proxy services
+  * MCM: new MIC provider and proxy service definitions
+  * cleanup build warnings
+  * common: add CQ,QP,MR abstractions for new MIC provider and data proxy service
+  * openib: cleanup, use inet_ntop for GIDs, remove some logs, destroy pipes on release
+  * common: new dapls_evd_cqe_to_event call, cqe to event
+  * common: init ring_buffer, assign hd/tl pos in range
+  * allow log level changes during device open
+  * ucm: fix cm rbuf setup, include grh pad on initialization
+  * ucm: remove duplicate async_event code, use common async event call
+  * new lightweight open_query/close_query IB extension for fast attribute query
+  * dtestcm: add more detailed debug during disconnect phase
+  * cma: long delays when opening cma provider with no IPoIB configured
+  * common: new debug levels for low system memory, IA stats, and package info
+  * build: remove library check for mverbs with --enable-fca
+  * IB extension: segfault in create collective group with non-vector type IA handle"
+  * build: change configure help to correctly state collective default=none
+  * Release 2.0.42
+  * dapltest: increase DTO evd size to prevent CQ overflow on limit_rpost test
+  * Creation of reserved SP moves EP state to DAT_EP_STATE_RESERVED even in failure cases. Reserve EP after successfully binding the listening port.
+  * dapl: fix string bug in dapls_dto_op_str
+  * Release 2.0.41
+  * dapltest: change server port, from 45278 to 62000, out of registered IANA range
+  * dat: lower log level on load errors of provider library
+  * dat: dat_ia_open should close provider after failure
+  * dapltest: set default limit max to 1000
+  * openib: add new provider specific attributes
+  * dapltest: update scripts for regression testing purposes
+  * dapltest: Add final send/recv "sync" for transaction tests.
+
+ -- Arlin Davis <arlin.r.davis@intel.com> Thu, 12 Aug 2014 11:17:12 +0200
+
+dapl (2.0.40mlnx1-1) unstable; urgency=low
+
+  * dist: ib collective extension include files missing
+  * dapltest: the quit command is missing changes for -n option.
+  * dat.conf: remove v1, add Mellanox Connect-IB and Intel Xeon Phi MIC
+  * NULL undefined on Fedora, incorrectly using kernel stddef.h
+
+ -- Arlin Davis <arlin.r.davis@intel.com> Thu, 13 Feb 2014 11:17:12 +0200
+
+dapl (2.0.39mlnx1-1) unstable; urgency=low
+
+  * Updated to version 2.0.39
+
+ -- Vladimir Sokolovsky <vlad@mellanox.com>  Tue, 22 Oct 2013 18:19:30 +0200
+
+dapl (2.0.38mlnx1-1) unstable; urgency=low
+
+  * Added debian support for version 2.0.38 (Closes: #331562)
+
+ -- Alaa Hleihel <alaa@mellanox.com>  Sun, 08 Sep 2013 14:09:30 +0200
+
+dapl (2.0.19-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Don't ship .la files (Closes: #621185).
+  * Remove INSTALL symlink and config.log so rebuilds work.
+
+ -- Luk Claes <luk@debian.org>  Sat, 11 Jun 2011 17:09:30 +0200
+
+dapl (2.0.19-1) unstable; urgency=low
+
+  * Initial release (Closes: #539795)
+
+ -- Benoit Mortier <benoit.mortier@opensides.be>  Mon, 30 Mar 2010 00:28:00 +0100

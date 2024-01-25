@@ -1,0 +1,83 @@
+#######################################################################
+#                                                                     #
+# DAPL Patch Guide                                                    #
+#                                                                     #
+# James Lentini                                                       #
+# jlentini at users.sourceforge.net                                   #
+#                                                                     #
+# Created 03/30/2005                                                  #
+# Version 1.0                                                         #
+#                                                                     #
+#######################################################################
+
+
+Overview
+--------
+
+The DAPL Reference Implementation (RI) Team welcomes code contributions 
+and bug fixes from RI users. This document describes the format for 
+submitting patches to the project.
+
+Directions
+----------
+
+When implementing a new feature or bug fix, please remember to:
+
++ Use the project coding style, described in doc/dapl_coding_style.txt
++ Remember that the RI supports multiple platforms and transports. If 
+  your modification is not applicable to all platforms and transports,
+  please ensure that the implement does not affect these other 
+  configurations.
+
+When creating the patch:
+
++ Create the patch using a unified diff as follows: 
+  diff -Naur old-code new-code > patch
++ Create the patch from the root of the CVS tree.
+
+When submitting the patch:
+
++ Compose an email message containing a brief description of the patch, 
+  a signed-off by line, and the patch.
++ Have the text "[PATCH]" at the start of the subject line
++ Send the message to dapl-devel@lists.sourceforge.net
+
+Example
+-------
+
+Here is an example patch message:
+
+------------------------------------------------------------
+Date: 30 Mar 2005 11:49:45 -0500
+From: Jane Doe
+To: dapl-devel@lists.sourceforge.net
+Subject: [PATCH] fixed status returns
+
+Here's a patch to fix the status return value in 
+dats_handle_vector_init().
+
+Signed-off-by: Jane Doe <jdoe at pseudonyme.com>
+
+--- dat/common/dat_api.c~       2005-03-30 11:58:40.838968000 -0500
++++ dat/common/dat_api.c        2005-03-28 12:33:29.502076000 -0500
+@@ -70,16 +70,15 @@
+ {
+     DAT_RETURN         dat_status;
+     int                        i;
+-    int                        status;
+
+     dat_status = DAT_SUCCESS;
+
+     g_hv.handle_max   = DAT_HANDLE_ENTRY_STEP;
+
+-    status = dat_os_lock_init (&g_hv.handle_lock);
+-    if ( DAT_SUCCESS != status )
++    dat_status = dat_os_lock_init (&g_hv.handle_lock);
++    if ( DAT_SUCCESS != dat_status )
+     {
+-       return status;
++       return dat_status;
+     }
+
+     g_hv.handle_array = dat_os_alloc (sizeof(void *) * DAT_HANDLE_ENTRY_STEP);
+------------------------------------------------------------

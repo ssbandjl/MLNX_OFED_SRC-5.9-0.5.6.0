@@ -1,0 +1,5 @@
+.debhelper/
+files
+mlnx-ethtool.debhelper.log
+mlnx-ethtool.substvars
+mlnx-ethtool/

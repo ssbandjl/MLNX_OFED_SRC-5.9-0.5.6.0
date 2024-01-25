@@ -1,0 +1,31 @@
+#! /usr/bin/make -f
+
+PREFIX := /opt/mellanox/iproute2
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	MLNX_OFED_BLUEFIELD_BUILD=`echo $$DEB_BUILD_PROFILES | grep -ow bluefield` \
+	./configure --prefix=$(PREFIX)
+
+override_dh_auto_build:
+	make \
+		PREFIX=$(PREFIX) \
+		SBINDIR=$(PREFIX)/sbin \
+		CONFDIR=$(PREFIX)/etc/iproute2 \
+		NETNS_RUN_DIR=/var/run/netns-mlnx \
+		NETNS_ETC_DIR=$(PREFIX)/etc/netns \
+		ARPDIR=$(PREFIX)/var/lib/arpd
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	dh_auto_install -- \
+		PREFIX=$(PREFIX) \
+		SBINDIR=$(PREFIX)/sbin \
+		CONFDIR=$(PREFIX)/etc/iproute2 \
+		NETNS_RUN_DIR=/var/run/netns-mlnx \
+		NETNS_ETC_DIR=$(PREFIX)/etc/netns \
+		ARPDIR=$(PREFIX)/var/lib/arpd
+

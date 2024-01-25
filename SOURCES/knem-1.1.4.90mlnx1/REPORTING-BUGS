@@ -1,0 +1,23 @@
+In case of problem, make sure you read the README first :)
+Please also look at the documentation in the doc/ directory
+or online at
+  http://knem.gitlabpages.inria.fr/doc/knem.html
+
+
+Bugs should be reported on
+  http://gitlab.inria.fr/knem/knem
+or sent to knem-devel@lists.gforge.inria.fr .
+Questions may be asked there too.
+
+When reporting a problem, make sure you include:
+* the version number of KNEM
+  (or the output of 'git show' if you checkouted the GIT repository)
+* the output (as root) of
+  + cat /dev/knem
+* the whole outputs (as root) of:
+  + lsmod
+  + dmesg
+* the whole output of the program if a program did not work
+  as expected
+* the whole output of configure, config.log and knem_checks.h,
+  and of the compilation if reporting a build problem

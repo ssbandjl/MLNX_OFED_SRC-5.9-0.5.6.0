@@ -1,2 +1,21 @@
-install.pl
+install on comm version:
+./install.pl <option 1> <option 2> .
+./install.pl --help
+
+--bluefield
+
+
+install ref doc:
+https://docs.nvidia.com/networking/display/mlnxofedv561033/installing+mlnx_ofed
+
+
+version:
+MLNX_OFED_SRC-5.9-0.5.6.0
+
+
+tool:
+mlxdevm
+SOURCES/mlnx-iproute2-6.0.0/mlxdevm/mlxdevm.c
+
+
 

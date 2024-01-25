@@ -1,0 +1,7 @@
+usr/lib/lib*.so.*
+usr/lib/libdaplofa.so.2.0.0
+usr/lib/libdaplofa.so.2
+usr/lib/libdat2.so.2.0.0
+usr/lib/libdat2.so.2
+etc/
+

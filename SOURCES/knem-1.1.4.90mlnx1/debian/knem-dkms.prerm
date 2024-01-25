@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+# Get the package version
+package=knem
+version=`dpkg-query -W -f='${Version}' "$package-dkms" \
+    | sed -e 's/[+-].*//'`
+
+# unload knem
+/sbin/modprobe -r knem > /dev/null 2>&1 || true
+if (grep -qw knem /etc/modules 2>/dev/null); then
+	sed -i '/knem/d' /etc/modules 2>/dev/null || true
+fi
+
+dkms remove -m "$package" -v "$version" --all || true
+
+rm -f /usr/lib/pkgconfig/${package}.pc || true
+
+#DEBHELPER#
+
+exit 0

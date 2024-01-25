@@ -1,0 +1,39 @@
+#!/bin/sh
+set -e
+
+# Get the package version
+package=knem
+version=`dpkg-query -W -f='${Version}' "$package-dkms" \
+    | sed -e 's/[+-].*//'`
+arch=`dpkg --print-architecture`
+
+dkms_configure () {
+        POSTINST="/usr/src/$package-$version/common.postinst"
+        if [ -f "$POSTINST" ]; then
+                "$POSTINST" "$package" "$version" "$arch" "$2"
+                return $?
+        fi
+        echo "WARNING: $POSTINST does not exist." >&2
+        echo "ERROR: DKMS version is too old and $package was not" >&2
+        echo "built with legacy DKMS support." >&2
+        echo "You must either rebuild $package with legacy postinst" >&2
+        echo "support or upgrade DKMS to a more current version." >&2
+        return 1
+}
+
+if [ "$1" = 'configure' ] ; then
+	dkms_configure
+fi
+
+# load knem
+/sbin/modprobe -r knem > /dev/null 2>&1 || true
+/sbin/modprobe knem > /dev/null 2>&1 || true
+
+# automatically load knem onboot
+if ! (grep -qw knem /etc/modules 2>/dev/null); then
+	echo knem >> /etc/modules || true
+fi
+
+#DEBHELPER#
+
+exit 0

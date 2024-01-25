@@ -1,0 +1,1097 @@
+		      README/Release Notes 
+	  	  OFED 4.8 DAPL Release 2.1.10
+		          Dec 2016
+
+	User space libraries/utilities for Direct Access Transport (DAT) v2.0. DAT is 
+	a transport-independent, platform-independent Application Programming 
+	Interface that supports RDMA (remote direct memory access) devices. 
+	Note: v1.2 is no longer supported and will not be included with OFED releases
+	
+	MIC support is provided with the new MCM provider and MPXYD service, since dapl-2.1.0. 
+        MCM requires the Intel(R) MPSS 3.x (YOCTO) release for Linux to be installed on your system. 
+        MPSS 3.x for Linux can be downloaded from: http://software.intel.com/mic-developer
+
+	For latest documentation and packages: //www.openfabrics.org/downloads/dapl/ 
+
+	=================
+	1.0 Release Notes
+	=================
+	dapl-2.1.10 changes include bug fixes, CCL Proxy post_send optimizations, dtest/dtest_suite improvements
+	
+	dapl-2.1.9-2 changes include bug fixes, MFO fixes, GID query attributes
+	dapl-2.1.9-1 changes include dtestcm improvement, bug fixes for MIC, Fix SCM interop issue with MTU	
+		
+	dapl-2.1.8 changes include dtest improvement, adding Intel OPA support, and MTU negotiation
+	- Add dtest -D option for data check/validation via pingpong test
+	- Add dtest -q option for open/query only option
+	- Add support for new hfi (Intel OPA) driver, all providers
+		CCL Proxy can support hfi in MFO mode via mcm provider
+	- Active MTU is now set as default QP MTU, CM mechanism added to negotiate
+		and fallback to smaller size of endpoints. Is backward compatible with
+		older providers running defaults of 2K and can be adjusted with 
+		pre-existing DAPL_IB_MTU environment setting.	
+	- Bug fixes, including CCL Data corruption (scif_writeto ordering requirements).
+	- Provide new test/dtest/dtest_suite.sh script for automated host to mic test/validation.	
+	
+	dapl-2.1.7 changes include dtest improvement and CCL Proxy P2P inline support:
+	
+	- Add dtest -W option for rdma write pinpong test, 
+		new options with -W include -a (all data sizes) -i (incremental size)
+	- CCL Proxy small message latency improvment with Proxy2Proxy inline support
+ 		for message sizes < 96 bytes, reduces MPI pingpong single byte latency 
+ 		for MFO devices by 27%.
+ 			
+	dapl-2.1.6 changes include MIC support for full offload mode
+	
+	- Add support for Truescale qib devices with no CCL Direct verbs support on MIC.
+	- Enhancement for inside the box transfers without IB adapter via ibscif.
+	- Add DAPL_NETWORK_NODES, DAPL_NETWORK_PPN environment variables. 
+	
+	dapl-2.1.5 changes include improvements for large scale UD communication management:
+
+	- AH caching, reduced memory footprint (grows as needed)
+	- Port space increased to 24 bits
+	- Hash table for port space, CM object management
+	- Optimized CM wire protocol for fast index lookup 
+	
+	Tested on 1200n 28ppn cluster, AlltoAll Intel MPI, UD mode.
+	Both static and dynamic modes, over 500m UD QP connections.
+	
+	==========
+	2.0 BUILD:
+	==========
+
+	# NON_DEBUG build/install example for x86_64, OFED targets
+	./configure --prefix /usr --sysconf=/etc --libdir /usr/lib64 LDFLAGS=-L/usr/lib64 CPPFLAGS="-I/usr/include"
+	make install
+
+	# DEBUG build/install example for x86_64, using OFED targets
+	./configure --enable-debug --prefix /usr --sysconf=/etc --libdir /usr/lib64 LDFLAGS=-L/usr/lib64 CPPFLAGS="-I/usr/include"
+	make install
+
+	# COUNTERS build/install example for x86_64, using OFED targets
+	./configure --prefix /usr --sysconf=/etc --libdir /usr/lib64 LDFLAGS=-L/usr/lib64 CPPFLAGS="-I/usr/include -DDAPL_COUNTERS"
+	make install
+
+	=========================================================
+	3.0 Provider descriptions and CM results (cma, scm, ucm):
+	=========================================================
+
+	1. CMA - uses OFA rdma_cm to setup QP's. IPoIB, ARP, and SA queries required.
+       
+	Provider name: ofa-v2-ib0
+	PROs:	OFA rdma_cm has the most testing across many applications.
+		Supports both iWARP and IB.
+                            
+	CONs:	Serialization of conn processing with kernel based CM service
+		Requires IPoIB ARP for name resolution, storms
+		Requires SA for path record queries for IB fabrics.
+		Conn Request private data limited to 52 bytes.
+        
+	Settings for larger clusters (512+ cores):
+
+	setenv DAPL_CM_ROUTE_TIMEOUT_MS 20000
+	setenv DAPL_CM_ARP_TIMEOUT_MS 10000
+
+	2. SCM - uses sockets to exchange QP information. IPoIB, ARP, and SA queries NOT required.
+       
+	Provider name (connectx): ofa-v2-mlx4_0-1
+	PROs:	Each rank has own instance of socket cm. More private data with requests. 
+		Doesn't require path-record lookup.   	
+                            
+	CONs:	Socket resources grow with scale-out, serialization of
+		connections with kernel based tcp sockets, 
+		Competes for MPI socket resources/port space and other TCP applications. 
+		Sockets remain in TIMEWAIT state for minutes after closure. 
+		Requires ARP for name resolution.
+		Doesn't support iWARP devices.
+        
+	Settings for larger clusters (512+ cores):
+
+	setenv DAPL_ACK_RETRY 7         /* IB RC Ack retry count */
+	setenv DAPL_ACK_TIMER 20        /* IB RC Ack retry timer */
+
+	3. UCM - use's IB UD QP to exchange QP info. Sockets, ARP, IPoIB, and SA queries NOT required.
+       
+	Provider name (connectx): ofa-v2-mlx4_0-1u
+	PROs:	Each rank has own instance of CM in user process 
+		Resources fixed per rank regardless of scale-out size
+		No serialization of user or kernel resources establishing connections, 
+		Simple 3-way msg handsake, CM messages fit in inline data for lowest message latency,
+		Supports alternate paths
+		No address resolution required. 
+		No path resolution required.
+                            
+	CONs:	New provider with limited testing, a little tougher to debug. 
+		Doesn't support iWARP	
+        
+	Settings for larger clusters (512+ cores):
+
+	setenv DAPL_UCM_REP_TIME 10000   /* REQUEST timer, waiting for REPLY in millisecs */
+	setenv DAPL_UCM_RTU_TIME 10000   /* REPLY timer, waiting for RTU in millisecs */
+	setenv DAPL_UCM_CQ_SIZE  2000   /* CM completion queue */
+	setenv DAPL_UCM_QP_SIZE  2000   /* CM message queue */
+	setenv DAPL_UCM_RETRY 7         /* REQUEST and REPLY retries */
+	setenv DAPL_ACK_RETRY 7         /* IB RC Ack retry count */
+	setenv DAPL_ACK_TIMER 20        /* IB RC Ack retry timer */
+
+	CM Performance: CPS profile for cma, scm, and ucm v2 uDAPL providers:
+	-----------------------------------------------------------------------
+ 	Intel(R) Xeon(R) CPU E5-2690 v2 @ 3.00GHz (IVT)
+	Mellanox MLX4 IB FDR, no switch.
+
+	dtestcm (server/client):
+
+        cma: Connections: 313.10 usec, CPS  3193.83 Total 0.31 secs, poll_cnt=6300, Num=1000
+        scm: Connections: 167.65 usec, CPS  5964.92 Total 0.17 secs, poll_cnt=2394, Num=1000
+        ucm: Connections:  71.85 usec, CPS 13918.06 Total 0.07 secs, poll_cnt=2360, Num=1000
+
+        dapl_cm_bw: MPI uDAPL/CM profiling application (all-to-all connections, all ranks)
+
+        CMA
+        2  Connect times (10):   Total 0.0049 per 0.0005 CPS=2051.38
+        4  Connect times (40):   Total 0.0151 per 0.0004 CPS=2650.16
+        8  Connect times (240):  Total 0.0548 per 0.0002 CPS=4380.59
+        16 Connect times (1120): Total 4.0356 per 0.0036 CPS=277.53
+        32 Connect times (4800): Total 4.4704 per 0.0009 CPS=1073.72
+
+        SCM
+        2  Connect times (10):   Total 0.0029 per 0.0003 CPS=3441.31
+        4  Connect times (40):   Total 0.0060 per 0.0002 CPS=6635.97
+        8  Connect times (240):  Total 0.0194 per 0.0001 CPS=12383.47
+        16 Connect times (1120): Total 0.0649 per 0.0001 CPS=17246.93
+        32 Connect times (4800): Total 1.0193 per 0.0002 CPS=4708.95
+
+        UCM
+        2  Connect times (10):   Total 0.0014 per 0.0001 CPS=6993.91
+        4  Connect times (40):   Total 0.0045 per 0.0001 CPS=8837.87
+        8  Connect times (240):  Total 0.0155 per 0.0001 CPS=15477.13
+        16 Connect times (1120): Total 0.0630 per 0.0001 CPS=17765.12
+        32 Connect times (4800): Total 0.2632 per 0.0001 CPS=18236.54
+
+	===================================================================================================
+	4.0 BKM for installing new DAPL library on your cluster without any impact on existing OFED install:
+	====================================================================================================
+	
+	Note: example for user /home/user1, (assumes /home/user1 is exported) and MLX4 adapter, port 1
+
+	Download latest 2.1.x package: http://www.openfabrics.org/downloads/dapl/dapl-2.1.x.tar.gz
+
+	untar in /home/user1 
+	cd /home/user1/dapl-2.1.x
+	./configure LDFLAGS=-L/usr/lib64 CPPFLAGS="-I/usr/include" 
+	make 
+
+	Create /home/user1/dat.conf with following 3 lines. (entries with path to new libraries):
+
+	  ofa-v2-mlx4_0-1u u2.0 nonthreadsafe default /home/user1/dapl-2.1.x/dapl/udapl/.libs/libdaploucm.so.2 dapl.2.0 "mlx4_0 1" ""
+	  ofa-v2-mlx4_0-1m u2.0 nonthreadsafe default /home/user1/dapl-2.1.x/dapl/udapl/.libs/libdaplomcm.so.2 dapl.2.0 "mlx4_0 1" ""
+	  ofa-v2-mlx4_0-1 u2.0 nonthreadsafe default /home/user1/dapl-2.1.x/dapl/udapl/.libs/libdaploscm.so.2 dapl.2.0 "mlx4_0 1" ""
+	  ofa-v2-ib0 u2.0 nonthreadsafe default /home/user1/dapl-2.1.x/dapl/udapl/.libs/libdaplcma.so.1 dapl.2.0 "ib0 0" ""
+
+	Run uDAPL application or Intel MPI that uses uDAPL, with (assuming mlx4_0 adapters) following:
+
+	  setenv DAT_OVERRIDE=/home/user1/dat.conf
+	  setenv LD_LIBRARY_PATH=/home/user1/dapl-2.1.5/dapl/udapl/.libs:$LD_LIBRARY_PATH
+
+	If running Intel MPI and uDAPL IB UD cm, set the following (recommended):
+
+  	  setenv I_MPI_DAPL_PROVIDER=ofa-v2-mlx4_0-1u
+	
+	If running Intel MPI and uDAPL IB mcm with MIC, set the following:
+
+  	  setenv I_MPI_DAPL_PROVIDER=ofa-v2-mlx4_0-1m
+	
+	If running Intel MPI and uDAPL socket cm, set the following:
+
+  	  setenv I_MPI_DAPL_PROVIDER=ofa-v2-mlx4_0-1
+
+	
+	If running Intel MPI and uDAPL rdma_cm, set the following:
+
+	  setenv I_MPI_DAPL_PROVIDER=ofa-v2-ib0
+
+
+	============================================================
+	5.0 MCM Provider, MPXYD Daemon (CCL-proxy) Build and Install
+	============================================================
+	 
+	MCM is a new uDAPL provider that is an extension to standard DAT 2.0 libraries. The purpose of this service
+	is to proxy RDMA writes from the MIC to the HOST to improve large IO performance. The provider will support
+	MIC to MIC, HOST to HOST, and MIC to HOST environments. The mcm client will NOT use MPXYD when running on the host.
+	It requires a new MPXYD daemon service when clients are running on a MIC KNC adapter. This package installs all the
+	host side libraries and daemon service. The MIC libraries must be built and moved over to MIC adapter. This verion
+	is currently included with MPSS and all libraries and services will be installed by default.
+
+	Current release package: dapl-2.1.9.tar.gz 
+
+	* Sample host build from source package (ofed must be installed)
+
+  	./configure --enable-mcm --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
+  	make
+  	make install
+
+	* Sample host rpmbuild/update from release tarball, /root:
+
+	rpmbuild -ta dapl-2.1.9.tar.gz
+	rpm -U /root/rpmbuild/RPMS/x86_64/dapl*
+
+	* Sample MIC build from source package for MPSS 3.x KNC (MPSS must be installed)
+	* Assume /opt is nfs mounted across cluster
+
+  	source /opt/mpss/3.x/environment-setup-k1om-mpss-linux 
+	./configure --enable-mcm --prefix /opt/dapl/mic --host=x86_64-k1om-linux
+	make
+	make install
+
+	copy /opt/dapl/mic/* files out to all MIC cards
+   
+	* Cluster deployment
+
+  	(1) Build once on the head or on one of the nodes (with MPSS) as described in the above steps.
+
+  	(2) HOST: Install dapl libraries and mpxyd service, "rpm -U" all dapl RPM files on host nodes:
+
+  	(3) MIC: Setup dapl overlay for new package (/opt/intel/dapl):
+	
+		Create /etc/mpss/conf.d/dapl.conf with following entry:
+
+			Overlay Filelist /opt/dapl /opt/dapl/dapl.filelist on
+		
+		Create /opt/dapl/dapl.filelist with following entries: 
+
+			file /etc/dat.conf mic/etc/dat.conf 755 0 0
+			file /usr/bin/dtest mic/bin/dtest 755 0 0
+			file /usr/bin/dtestx mic/bin/dtestx 755 0 0
+			file /usr/bin/dtestcm mic/bin/dtestcm 755 0 0
+			file /usr/bin/dapltest mic/bin/dapltest 755 0 0
+			file /usr/lib64/libdat.so.2.0.0 mic/lib/libdat.so.2.0.0 755 0 0
+			file /usr/lib64/libdaplofa.so.2.0.0 mic/lib/libdaplofa.so.2.0.0 755 0 0
+			file /usr/lib64/libdaplomcm.so.2.0.0 mic/lib/libdaplomcm.so.2.0.0 755 0 0
+			file /usr/lib64/libdaploscm.so.2.0.0 mic/lib/libdaploscm.so.2.0.0 755 0 0
+			file /usr/lib64/libdaploucm.so.2.0.0 mic/lib/libdaploucm.so.2.0.0 755 0 0
+
+			slink /usr/lib64/libdat.so libdat.so.2.0.0 777 0 0
+			slink /usr/lib64/libdat.so.2 libdat.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplofa.so libdaplofa.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplofa.so.2 libdaplofa.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplomcm.so libdaplomcm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaplomcm.so.2 libdaplomcm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploscm.so libdaploscm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploscm.so.2 libdaploscm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploucm.so libdaploucm.so.2.0.0 777 0 0
+			slink /usr/lib64/libdaploucm.so.2 libdaploucm.so.2.0.0 777 0 0
+	
+		Reboot or restart MPSS and ofed-mic services
+
+		Check for dapl overlay
+			micctrl --config  
+
+	* Setup for non-root CCL Proxy testing, MPXYD running as process with different service port from your /home directory:
+
+   	Using build instructions above, change prefix as follow and "make install":
+
+   	Build MIC:
+		--prefix=/home/username/ccl-proxy-mic
+
+   	Build host:
+		--prefix=/home/username/ccl-proxy-host
+	
+	edit /home/username/ccl-proxy-host/etc/mpxyd.conf and change the following entries:
+	
+	log_file /var/log/mpxyd.log  	to log_file /tmp/username/mpxyd.log
+	lock_file /var/log/mpxyd.pid 	to lock_file /tmp/username/mpxyd.log
+	scif_port_id 68 		to scif_port_id 1068
+	
+	start the mpxyd process on each node
+	
+	ssh node1-hostname /home/username/ccl-proxy-host/sbin/mpxyd -P -O /home/username/ccl-proxy-host/etc/mpxyd.conf&
+	
+	Note: override default port id using following environment variable:
+	
+	export DAPL_MCM_PORT_ID=1068
+   
+   	* Notes
+
+  	(1) Modify "/etc/mpxyd.conf" to change the settings for the proxy. Especially, try different values
+      	of "buffer_segment_size" for performance tuning. Use a smaller value for "buffer_pool_mb"   
+      	to reduce the memory foorprint of mpxyd. Use a larger value for "scif_listen_qlen" to run 
+      	more MPI ranks per card. Also modify mcm_affinity_base to the desired CPU_id to insure
+      	socket to adapter affinity. Best performance when HCA, MIC, and CPU are on same socket.
+      	Default settings are on CPU socket 0.
+
+  	(2) By default, only writes originated from MIC is proxied. However, it is also possible to proxy 
+      	host-originated writes (e.g. for debugging purpose). To do this, set the environment variable
+      	"DAPL_MCM_ALWAYS_PROXY=1". This variable applies to the provider, not the proxy.
+
+	(3) Use the MCM provider with Intel MPI 5.1 or greater for best out of box experiences with MIC.
+
+  		Recommended settings:
+
+		export I_MPI_MIC=1
+		export I_MPI_DEBUG=2
+		export I_MPI_FALLBACK=0
+		
+	(4) Server Platform Notes:
+	
+	For optimal CCL Proxy performance, installed on Intel® Xeon® Processor E5-26xx v2 and v3 platforms, 
+	please update to the latest platform BIOS and set the following Processor, Power, and Memory settings.
+
+	https://downloadcenter.intel.com/default.aspx
+  
+	[BIOS::Advanced::Processor Configuration]
+	       	Intel(R) QPI Frequency Select=Auto Max    
+	       	Intel(R) Turbo Boost Technology=Enabled            
+	       	Enhanced Intel SpeedStep(R) Tech=Enabled           
+	       	Processor C3=Disabled                             
+	       	Processor C6=Enabled                                   
+	       	Intel(R) Virtualization Technology=Disabled        
+	       	Intel(R) VT for Directed I/O=Disabled              
+	       	Direct Cache Access (DCA)=Enabled                  
+	       	Extended ATR=0x01                                  
+       
+	[BIOS::Advanced::Power & Performance]
+      	 	CPU Power and Performance Policy=Performance       
+
+	[BIOS::Advanced::Memory Configuration::Memory RAS and Performance Configuration]
+	       	Select Memory RAS Configuration=Maximum Performance 
+	       	NUMA Optimized=Enabled 
+			
+	====================================================================
+	6.0 Mellanox Fabric Collective Accelerator (FCA) build for Intel MPI
+	====================================================================
+	
+	1) Download latest package: http://www.openfabrics.org/downloads/dapl/dapl-2.x.x.tar.gz
+	
+	2) Build/Install with collectives configured for fca type:
+	
+	   ./configure --enable-coll-type=fca --disable-mcm --prefix=/usr
+			LDFLAGS=-L/opt/mellanox/fca/lib 
+			CPPFLAGS=-I/opt/mellanox/fca/include
+	    make install
+	
+	If an uDAPL provider with collective support is installed as an additional package, 
+	while another uDAPL provider also exists in a system, LD_LIBRARY_PATH environment 
+	variable should be updated to include the path to the newly installed DAPL package.  
+	
+	3) Set following MPI variables:
+	
+		export FCA_MGR_HOME=/opt/mellanox/fca 
+		export FCA_HOME=/opt/mellanox/fca 
+		export I_MPI_DAPL_COLLECTIVES=all 
+		export I_MPI_FABRICS=dapl 
+		export I_MPI_FALLBACK_DEVICE=off 
+		
+	=============================
+	7.0 Environment Variables
+	=============================
+	
+	 - IB UD options using UCM provider, large scale settings (Xeon)
+	
+	export DAPL_NETWORK_NODES= 	/* set to active nodes on network for CM */
+	export DAPL_NETWORK_PPN= 	/* set to active processes per node for CM */ 
+	
+	/* The following will be adjusted by provider based on NODES, PPN */
+	export DAPL_UCM_REP_TIME=8000   /* REQUEST timer, waiting on REPLY, msecs, default = 800 */
+	export DAPL_UCM_RTU_TIME=8000   /* REPLY timer, waiting for RTU in msecs, default=400 */
+	export DAPL_UCM_RETRY=7       	/* REQUEST & REPLY retries, default = 7 */
+	export DAPL_UCM_QP_SIZE=4000	/* CM req/reply work queue size, default = 500 entries */
+	export DAPL_UCM_CQ_SIZE=4000	/* CM req/reply completion queue size, default = 500 entries */
+	export DAPL_UCM_TX_BURST=100	/* CM signal rate on send messages */
+	export DAPL_UCM_ENTRY_BITS=11	/* default = 11-bit, 2KB entries, allocation blocks */; 
+	export DAPL_UCM_ARRAY_BITS=18	/* default = 18 bit, 256KB total */
+	
+	- IB RC options using SCM provider
+	
+	export DAPL_SCM_NETDEV=ib0	/* default is first non-loopback netdev */
+	
+	- Other IB settings for all providers:
+	
+	export DAPL_MAX_INLINE=64	/*  IB RC inline optimization, best small msg latency, def=64 */
+	export DAPL_ACK_RETRY=7         /*  IB RC Ack retry count, default 7 */
+	export DAPL_ACK_TIMER=20       	/* IB RC Ack retry timer, 5 bits, 4.096us*2^ack_timer. 16== 268ms, 20==4.2s */
+	export DAPL_IB_MTU=2048		/* IB MTU size, default = 2048 */
+	export DAPL_RNR_TIMER=12	/* 5 bits, 12 =.64ms, 28 =163ms, 31 =491ms */
+	export DAPL_RNR_RETRY=7		/* 3 bits, 7 == infinite */
+	export DAPL_IB_PKEY= 0		/* override IB partition key, default is pkey index 0 */
+	export DAPL_IB_SL=0		/* override IB Sevice level, default = 0 */
+	
+	- Other options:
+	export DAPL_WR_MAX=500 		/* used to reduce max qp depth on all IB providers, default = dev attributes */
+	
+	Debug logging and Counter settings ( --enable-counters)
+	
+	export DAPL_DBG_SYS_MEM=10	/* threshold for low sys memory warning, def = 10 percent */
+	export DAPL_DBG_TYPE=0x0000003 	/* set log, monitor, and error checking, default = warnings and errors */
+	
+	DAPL_DBG_TYPE bit settings as follow:
+	
+	DAPL_DBG_TYPE_ERR          = 0x0001,
+	DAPL_DBG_TYPE_WARN         = 0x0002,
+	DAPL_DBG_TYPE_EVD          = 0x0004,
+	DAPL_DBG_TYPE_CM           = 0x0008,
+	DAPL_DBG_TYPE_EP           = 0x0010,
+	DAPL_DBG_TYPE_UTIL         = 0x0020,
+	DAPL_DBG_TYPE_CALLBACK     = 0x0040,
+	DAPL_DBG_TYPE_DTO_COMP_ERR = 0x0080,
+	DAPL_DBG_TYPE_API          = 0x0100,
+	DAPL_DBG_TYPE_RTN          = 0x0200,
+	DAPL_DBG_TYPE_EXCEPTION   = 0x0400,
+	DAPL_DBG_TYPE_SRQ         = 0x0800,
+	DAPL_DBG_TYPE_CNTR        = 0x1000,
+	DAPL_DBG_TYPE_CM_LIST     = 0x2000,
+	DAPL_DBG_TYPE_THREAD      = 0x4000,
+	DAPL_DBG_TYPE_CM_EST      = 0x8000,
+	DAPL_DBG_TYPE_CM_WARN    = 0x10000,
+	DAPL_DBG_TYPE_EXTENSION  = 0x20000,
+	DAPL_DBG_TYPE_CM_STATS   = 0x40000,
+	DAPL_DBG_TYPE_CM_ERRS    = 0x80000,    /* print any cm errors on device close */
+	DAPL_DBG_TYPE_LINK_ERRS  = 0x100000,   /* print any link errors on device close */
+	DAPL_DBG_TYPE_LINK_WARN  = 0x200000,   /* print any link warning on device close */
+	DAPL_DBG_TYPE_DIAG_ERRS  = 0x400000,   /* print any diag_counter errors on dev close */
+	DAPL_DBG_TYPE_SYS_WARN   = 0x800000,   /* print low mem warning during alloc, reg_mem */
+	DAPL_DBG_TYPE_VER        = 0x1000000,  /* print dapl ver and build date during dev open */
+	
+	=============================
+	9.0 SAMPLE uDAPL APPLICATION:
+	=============================
+	
+	There are 2 sample programs, with manpages, provided with this package.
+	
+	(dapl/test/dtest/)
+	
+	NAME
+	       dtest - simple uDAPL send/receive and RDMA test
+	
+	SYNOPSIS
+	       dtest [-P provider] [-b buf size] [-B burst count][-v] [-c] [-p] [-d] [-s]
+	
+	       dtest [-P provider] [-b buf size] [-B burst count][-v] [-c] [-p] [-d] [-h HOSTNAME]
+	
+	DESCRIPTION
+	       dtest  is a simple test used to exercise and verify the uDAPL interfaces.  At least two instantia-
+	       tions of the test must be run. One acts as the server and the other the client. The server side of
+	       the  test,  once invoked listens for connection requests, until timing out or killed. Upon receipt
+	       of a cd connection request, the connection is established, the server and  client  sides  exchange
+	       information necessary to perform RDMA writes and reads.
+	
+	OPTIONS
+	       -P=PROVIDER
+	              use PROVIDER to specify uDAPL interface using /etc/dat.conf (default OpenIB-cma)
+	
+	       -b=BUFFER_SIZE
+	              use buffer size BUFFER_SIZE for RDMA(default 64)
+	
+	       -B=BURST_COUNT
+	              use busrt count BURST_COUNT for interations (default 10)
+	
+	       -v, verbose output(default off)
+	
+	       -c, use consumer notification events (default off)
+	
+	       -p, use polling (default wait for event)
+	
+	       -d, delay in seconds before close (default off)
+	
+	       -s, run as server (default - run as server)
+	
+	       -h=HOSTNAME
+	              use HOSTNAME to specify server hostname or IP address (default - none)
+	
+	EXAMPLES
+	       dtest -P OpenIB-cma -v -s
+	            Starts a server process with debug verbosity using provider OpenIB-cma.
+	
+	       dtest -P OpenIB-cma -h server1-ib0
+	
+	            Starts a client process, using OpenIB-cma provider to connect to hostname server1-ib0.
+	
+	SEE ALSO
+	       dapltest(1)
+	
+	AUTHORS
+	       Arlin Davis
+	              <ardavis@ichips.intel.com>
+	
+	BUGS
+	
+	/dapl/test/dapltest/
+	
+	NAME
+	        dapltest - test for the Direct Access Programming Library (DAPL)
+	
+	DESCRIPTION
+	       Dapltest  is  a  set  of tests developed to exercise, characterize, and verify the DAPL interfaces
+	       during development and porting.  At least two instantiations of the test must be run. One acts  as
+	       the  server, fielding requests and spawning server-side test threads as needed. Other client invo-
+	       cations connect to the server and issue test requests. The server side of the test, once  invoked,
+	       listens  continuously for client connection requests, until quit or killed. Upon receipt of a con-
+	       nection request, the connection is established, the server and client sides swap  version  numbers
+	       to  verify that they are able to communicate, and the client sends the test request to the server.
+	       If the version numbers match, and the test request is well-formed, the server spawns  the  threads
+	       needed to run the test before awaiting further connections.
+	
+	USAGE
+	       dapltest [ -f script_file_name ] [ -T S|Q|T|P|L ] [ -D device_name ] [ -d ] [ -R HT|LL|EC|PM|BE ]
+	
+	       With  no  arguments,  dapltest runs as a server using default values, and loops accepting requests
+	       from clients.
+	
+	       The -f option allows all arguments to be placed in a file, to ease test automation.
+	
+	       The following arguments are common to all tests:
+	
+	       [ -T S|Q|T|P|L ]
+	              Test function to be performed:
+	
+	              S      - server loop
+	
+	              Q      - quit, client requests that server wait for any outstanding tests to complete, then
+	                     clean up and exit
+	
+	              T      - transaction test, transfers data between client and server
+	
+	              P      - performance test, times DTO operations
+	
+	              L      -  limit  test,  exhausts  various  resources, runs in client w/o server interaction
+	                     Default: S
+	
+	      [ -D device_name ]
+	              Specifies the interface adapter name as documented in the /etc/dat.conf  static  configura-
+	              tion file. This name corresponds to the provider library to open.  Default: none
+	
+	       [ -d ] Enables  extra  debug  verbosity,  primarily tracing of the various DAPL operations as they
+	              progress.  Repeating this parameter increases debug spew.  Errors encountered result in the
+	              test  spewing some explanatory text and stopping; this flag provides more detail about what
+	              lead up to the error.  Default: zero
+	
+	       [ -R BE ]
+	              Indicate the quality of service (QoS) desired.  Choices are:
+	
+	              HT     - high throughput
+	
+	              LL     - low latency
+	
+	              EC     - economy (neither HT nor LL)
+	
+	              PM     - premium
+	
+	              BE     - best effort Default: BE
+	
+	       Usage - Quit test client
+	
+	           dapltest [Common_Args] [ -s server_name ]
+	
+	           Quit testing (-T Q) connects to the server to ask it to clean up and
+	           exit (after it waits for any outstanding test runs to complete).
+	           In addition to being more polite than simply killing the server,
+	           this test exercises the DAPL object teardown code paths.
+	           There is only one argument other than those supported by all tests:
+	
+	           -s server_name      Specifies the name of the server interface.
+	                               No default.
+	
+	       Usage - Transaction test client
+	
+	           dapltest [Common_Args] [ -s server_name ]
+	                    [ -t threads ] [ -w endpoints ] [ -i iterations ] [ -Q ]
+	                    [ -V ] [ -P ] OPclient OPserver [ op3,
+	
+	           Transaction testing (-T T) transfers a variable amount of data between
+	           client and server.  The data transfer can be described as a sequence of
+	           individual operations; that entire sequence is transferred ’iterations’
+	           times by each thread over all of its endpoint(s).
+	
+	           The following parameters determine the behavior of the transaction test:
+	
+	           -s server_name      Specifies the name or IP address of the server interface.
+	                               No default.
+	
+	           [ -t threads ]      Specify the number of threads to be used.
+	                               Default: 1
+	
+	           [ -w endpoints ]    Specify the number of connected endpoints per thread.
+	                               Default: 1
+	
+	           [ -i iterations ]   Specify the number of times the entire sequence
+	                               of data transfers will be made over each endpoint.
+	                               Default: 1000
+	
+	           [ -Q ]              Funnel completion events into a CNO.
+	                               Default: use EVDs
+	
+	           [ -V ]              Validate the data being transferred.
+	                               Default: ignore the data
+	
+	           [ -P ]              Turn on DTO completion polling
+	                               Default: off
+	
+	           OP1 OP2 [ OP3, ... ]
+	                               A single transaction (OPx) consists of:
+	
+	                               server|client   Indicates who initiates the
+	                                               data transfer.
+	
+	                               SR|RR|RW        Indicates the type of transfer:
+	                                               SR  send/recv
+	                                               RR  RDMA read
+	                                               RW  RDMA write
+	                               Defaults: none
+	
+	                               [ seg_size [ num_segs ] ]
+	:
+	
+	                                              Indicates the amount and format
+	                                               of the data to be transferred.
+	                                               Default:  4096  1
+	                                                         (i.e., 1 4KB buffer)
+	
+	                               [ -f ]          For SR transfers only, indicates
+	                                               that a client’s send transfer
+	                                               completion should be reaped when
+	                                               the next recv completion is reaped.
+	                                               Sends and receives must be paired
+	                                               (one client, one server, and in that
+	                                               order) for this option to be used.
+	           Restrictions:
+	
+	           Due to the flow control algorithm used by the transaction test, there
+	           must be at least one SR OP for both the client and the server.
+	
+	           Requesting data validation (-V) causes the test to automatically append
+	           three OPs to those specified. These additional operations provide
+	           synchronization points during each iteration, at which all user-specified
+	           transaction buffers are checked. These three appended operations satisfy
+	           the "one SR in each direction" requirement.
+	
+	           The transaction OP list is printed out if -d is supplied.
+	
+	       Usage - Performance test client
+	
+	           dapltest [Common_Args] -s server_name [ -m p|b ]
+	                    [ -i iterations ] [ -p pipeline ] OP
+	
+	           Performance testing (-T P) times the transfer of an operation.
+	           The operation is posted ’iterations’ times.
+	
+	           The following parameters determine the behavior of the transaction test:
+	
+	           -s server_name      Specifies the name or IP address of the server interface.
+	                               No default.
+	
+	           -m b|p              Used to choose either blocking (b) or polling (p)
+	                               Default: blocking (b)
+	          [ -i iterations ]   Specify the number of times the entire sequence
+	                               of data transfers will be made over each endpoint.
+	                               Default: 1000
+	
+	           [ -p pipeline ]     Specify the pipline length, valid arguments are in
+	                               the range [0,MAX_SEND_DTOS]. If a value greater than
+	                               MAX_SEND_DTOS is requested the value will be
+	                               adjusted down to MAX_SEND_DTOS.
+	                               Default: MAX_SEND_DTOS
+	
+	           OP                  Specifies the operation as follow:
+	
+	                               RR|RW           Indicates the type of transfer:
+	                                               RR  RDMA read
+	                                               RW  RDMA write
+	                                               Defaults: none
+	
+	                               [ seg_size [ num_segs ] ]
+	                                               Indicates the amount and format
+	                                               of the data to be transferred.
+	                                               Default:  4096  1
+	                                                         (i.e., 1 4KB buffer)
+	       Usage - Limit test client
+	
+	           Limit testing (-T L) neither requires nor connects to any server
+	           instance.  The client runs one or more tests which attempt to
+	           exhaust various resources to determine DAPL limits and exercise
+	           DAPL error paths.  If no arguments are given, all tests are run.
+	
+	           Limit testing creates the sequence of DAT objects needed to
+	           move data back and forth, attempting to find the limits supported
+	           for the DAPL object requested.  For example, if the LMR creation
+	           limit is being examined, the test will create a set of
+	           {IA, PZ, CNO, EVD, EP} before trying to run dat_lmr_create() to
+	           failure using that set of DAPL objects.  The ’width’ parameter
+	           can be used to control how many of these parallel DAPL object
+	           sets are created before beating upon the requested constructor.
+	           Use of -m limits the number of dat_*_create() calls that will
+	           be attempted, which can be helpful if the DAPL in use supports
+	           essentailly unlimited numbers of some objects.
+	           The limit test arguments are:
+	
+	           [ -m maximum ]      Specify the maximum number of dapl_*_create()
+	                               attempts.
+	                               Default: run to object creation failure
+	
+	           [ -w width ]        Specify the number of DAPL object sets to
+	                               create while initializing.
+	                               Default: 1
+	
+	           [ limit_ia ]        Attempt to exhaust dat_ia_open()
+	
+	           [ limit_pz ]        Attempt to exhaust dat_pz_create()
+	
+	           [ limit_cno ]       Attempt to exhaust dat_cno_create()
+	
+	           [ limit_evd ]       Attempt to exhaust dat_evd_create()
+	
+	           [ limit_ep ]        Attempt to exhaust dat_ep_create()
+	
+	           [ limit_rsp ]       Attempt to exhaust dat_rsp_create()
+	
+	           [ limit_psp ]       Attempt to exhaust dat_psp_create()
+	
+	           [ limit_lmr ]       Attempt to exhaust dat_lmr_create(4KB)
+	
+	           [ limit_rpost ]     Attempt to exhaust dat_ep_post_recv(4KB)
+	
+	           [ limit_size_lmr ]  Probe maximum size dat_lmr_create()
+	
+	                               Default: run all tests
+	EXAMPLES
+	       dapltest -T S -d -D OpenIB-cma
+	
+	                               Starts a server process with debug verbosity.
+	
+	       dapltest -T T -d -s host1-ib0 -D OpenIB-cma -i 100 client SR 4096 2 server SR 4096 2
+	
+	                               Runs a transaction test, with both sides
+	                               sending one buffer with two 4KB segments,
+	                              one hundred times.
+	
+	       dapltest -T P -d -s host1-ib0 -D OpenIB-cma -i 100 SR 4096 2
+	
+	                               Runs a performance test, with the client
+	                               sending one buffer with two 4KB segments,
+	                               one hundred times.
+	
+	       dapltest -T Q -s host1-ib0 -D OpenIB-cma
+	
+	                               Asks the server to clean up and exit.
+	
+	       dapltest -T L -D OpenIB-cma -d -w 16 -m 1000
+	
+	                               Runs all of the limit tests, setting up
+	                               16 complete sets of DAPL objects, and
+	                               creating at most a thousand instances
+	                               when trying to exhaust resources.
+	
+	       dapltest -T T -V -d -t 2 -w 4 -i 55555 -s linux3 -D OpenIB-cma client RW 4096 1 server RW  2048  4
+	       client SR 1024 4 server SR 4096 2 client SR 1024 3 -f server SR 2048 1 -f
+	
+	                               Runs a more complicated transaction test,
+	                               with two thread using four EPs each,
+	                               sending a more complicated buffer pattern
+	                               for a larger number of iterations,
+	                               validating the data received.
+	
+	=============================
+	9.0 Summary of Fixes/Changes:
+	=============================
+		
+	 Release 2.1.7 (OFED 3.18-1 GA)
+	 dtest: add -a -i options, all data sizes, incremental size
+ 	 dapl: Fix segfault while freeing qp
+ 	 mpxyd: add P2P inline support for data size <= 96 bytes
+ 	 dtest: change rdma_write_ping_pong so client is always last receiver
+ 	 ucm: add DAPL_NETWORK_PROCESS_NUM option for total ranks
+ 	 ucm: fca create group incorrectly using IB addr instead of socket address.
+ 	 ucm: fca_comm_destroy called with NULL
+ 	 dtest: add -W option for rdma write pinpong, similiar to ib_write_lat
+ 	 docs: update release notes for collective build
+ 	 mpxyd: reduce log level for rcv message flush
+ 	 dapltest: dapltest with no argument not working in ppc64 arch
+ 	
+	 Release 2.1.6 (OFED 3.18-1)
+	 ucm: add cluster size environments to adjust CM timers
+	 mpxyd: proxy_in data transfers can improperly start before RTU received
+	 mcm: forward open/query for MFO devices in query only mode
+	 mpxyd: byte swap incorrect on WRC wr_len
+	 dtest: remove ERR message from flush QP function
+	 dapltest: Quit command with "-n port" number will core dump
+	 config: update dat.conf for MFO qib devices, 2 adapters/ports
+	 mpxyd: add MFO support on proxy side
+	 mcm: add MFO proxy commands, device, and CM support
+	 mcm: add MFO support to openib_common code base
+	 mcm: add full offload (MFO) mode to provider to support qib on MIC
+	 dtest: pre-allocated buffer too small for RMR, DTO ops timeout
+	 mpxyd: fix buffer initialization when no-inline support is active
+	 mpxyd: reduce log level on qp_flush to CM level
+	 mcm: intra-node proxy missing LID setup on rejects
+	 mcm: add intra-node support via ibscif device and mcm provider
+	 mcm: provide MIC address info with proxy device open
+	 mcm: add device info to non-debug log
+	 common: add DAPL_DTO_TYPE_EXTENSION_IMM for rdma_write_imm DTO type checking
+	 mpxyd: fix up some of the PI logging
+	 dtest: modify rdma_write_with_msg to support uni-direction streaming
+	 mcm,mpxyd: fix dreq processing to defer QP flush when proxy WRs still pending
+	 mpxyd: update byte_len and comp_cnt for PO to remote HST communications
+	 mcm: bug fixes for non-inline devices
+	 mcm: return CM_rej with CM_req_in errors
+	 mpxyd,mcm: RDMA write with immed data not signaled on request side
+	 mcm: add WC opcode and wc_flags in debug log message
+	 mpxyd: set options bug fix for mcm_ib_inline
+	 Update release notes with latest CM times
+	
+	Release 2.1.5 (OFED 3.18 RC3)
+	update release notes, readme
+	dat.conf: update comments regarding versions
+	dtest: add logging of provider private data size with -v
+	scm: remove use of msg.resv field for process id logging
+	cma: report correct CM req private data size on query
+	mpxyd: memset ib_wr structure before post_send on WC and WR requests
+	mcm: add HST side provider support for device without inline data capability
+	ucm: CM changes for UD extended port space and indexer
+	ucm: add device support for new port space hash table
+	ucm: allocate/free AH hash table for UD endpoint types
+	ucm: check for AH caching when destroying via UD extension
+	ucm: optimizations for large scale UD communication management
+	mpxyd: use wr opcode instead of wc opcode to support logging on error cases
+	mcm: HST->MXS mode, using RDMA_WRITE_WITH_IMM, fails with dtest -w
+	dapl: aarch64 support for linux
+	dapltest: add scripts to dist, set default device to IPoIB
+	mpxyd: add wc_flags to proxy work completions
+	
+	Release 2.1.4 (OFED 3.18 RC1)
+	mpxyd: fix typo in configuration file
+	cma: RR attributes moved to common ib_cm struct
+	mpxyd: tx thread incorrectly sleeps with negative pi_rw_cnt value
+	dat.conf: add entries for True Scale qib device
+	mpxyd: add support for devices without inline data support
+	ucm: long disconnect times with many-to-one applications
+	openib: add inline data support check during device open
+	cleanup ib/cm attribute management across openib providers
+	dapltest: fix -Werror=format-security issue with printf
+	Release 2.1.3 (targeting OFED 3.18)
+	dapl: mpxyd service changes to support multi-thread single-core option
+	dapl: add rdma_write_imm and write only option to dtest
+	ucm: add time wait override capability for CM services
+	common: dapl_ep_free must serialize CM object destroy
+	dtestx: allow scale up to 1000 EP's
+	ucm: RTU not retransmitted in TIMEWAIT state
+	mpxyd: increase max open files for service
+	mpxyd: DTO completion ERR: status 12, op RDMA_WRITE running MPI alltoall test
+	mcm: HST->MXS mode incorrectly signals multiple fragments per WR
+	mcm: add segmentation to HST->MXS mode for improved performance
+	mpxyd: set global seg_sz to 128KB for proxy data service
+	openib: add port_num to provider named attributes
+	mcm: provide CPU family/model attribute on both host and mic sides
+	dtestx: update IB extension example test with new v2.0.9 features
+	dtest: add dtestsrq for SRQ example and provider testing
+	common: add srq support for openib verbs providers
+	openib: add IB UD cm_free/ah_free extension support in UCM provider
+	openib: add new TIMEWAIT state for CM
+	extension: add IB UD extensions to reduce provider CM and AH memory footprint
+	mpxyd/mcm: add provider specific attribute DAT_IB_PROXY_VERSION
+	mpxyd: log warning if running in COMPAT mode
+	add provider and proxy support for GUID across platform
+	common: return appropriate handles with affiliated EP and EVD async events
+	
+	Release 2.1.2 (OFED 3.12-1)
+	mpxyd: add global routing support for proxy connections
+	mcm: only call mix_get_attr if running on MIC
+	openib: modify check for link_layer to handle unspecified
+	dapl: add support for the s390x platform
+	dtest server exchange connection info with client
+	mpxyd: 2 MICs in same numa_node will overlap CPU affinity, don't reset base
+	mcm: implement proxy mix_prov_attr function, add fields CPU model and family
+	mpxyd: tx thread may not be signaled on small segment writes
+	
+	Release 2.1.1 (OFED 3.12-1 RC1)
+	common: add provider name to log messages
+	mpxyd: log warning message if numa_node invalid include debuginfo with build
+	build: include debuginfo with build
+	mpxyd: tx thread doesn't sleep during no pending IO state
+	mpxyd: change MIC cpu_mask to per numa node instead of adapter
+	mpxyd: set to MXS mode if device numa_node is invalid (-1)
+	mpxyd: MXS based alltoall benchmark hangs or returns post_send timeout
+	mpxyd: add IO profile capabilities to help debug alltoall stall cases
+	mpxyd: retry stalled inline post_send, init m_idx only when signaled
+	
+	Release 2.1.0 (OFED 3.12-1, MIC support added)
+	build: add missing NEWS file
+	update autogen.sh
+	add MCM provider and MPXYD service to build
+	mpxyd: service startup script and configuration file
+	add readme for MCM provider and MPXYD service
+	update Copyright dates
+	add new MIC RDMA proxy service daemon (MPXYD)
+	add new dapl MIC provider (MCM) to support MIC RDMA proxy services
+	MCM: new MIC provider and proxy service definitions
+	cleanup build warnings
+	common: add CQ,QP,MR abstractions for new MIC provider and data proxy service
+	openib: cleanup, use inet_ntop for GIDs, remove some logs, destroy pipes on release
+	common: new dapls_evd_cqe_to_event call, cqe to event
+	common: init ring_buffer, assign hd/tl pos in range
+	allow log level changes during device open
+	ucm: fix cm rbuf setup, include grh pad on initialization
+	ucm: remove duplicate async_event code, use common async event call
+	new lightweight open_query/close_query IB extension for fast attribute query
+	dtestcm: add more detailed debug during disconnect phase
+	cma: long delays when opening cma provider with no IPoIB configured
+	common: new debug levels for low system memory, IA stats, and package info
+	build: remove library check for mverbs with --enable-fca
+	IB extension: segfault in create collective group with non-vector type IA handle"
+	build: change configure help to correctly state collective default=none
+
+	Release 2.0.42 fixes (OFED 3.12 GA)
+	dapltest: increase DTO evd size to prevent CQ overflow on limit_rpost test
+	dapltest: RSP limit test fails. Creation of reserved SP moves EP state to DAT_EP_STATE_RESERVED in error cases.
+	dapl: fix string bug in dapls_dto_op_str
+
+	Release 2.0.41 fixes (OFED 3.12 RC1)
+	dapltest: change server port, from 45278 to 62000, out of registered IANA range
+	dat: lower log level on load errors of provider library
+	dat: dat_ia_open should close provider after failure
+	dapltest: set default limit max to 1000
+	openib: add new provider specific attributes
+	dapltest: update scripts for regression testing purposes
+	dapltest: Add final send/recv "sync" for transaction tests.
+
+	Release 2.0.40 fixes (OFED 3.12)
+	dist: ib collective extension include files missing
+	dapltest: the quit command is missing changes for -n option
+	dat.conf: remove v1, add Mellanox Connect-IB and Intel Xeon Phi MIC
+	NULL undefined on Fedora, incorrectly using kernel stddef.h
+
+	Release 2.0.39 fixes (OFED 3.5-2 GA)
+	dapltest: fix endian swap issue with performance test
+	scm: getifaddrs modfications for better out of the box experience
+	ucm, scm: UD mode triggers list_head assert with large scale alltoall test
+
+	Release 2.0.38
+	dapltest: add -n parameter to override default server port number (45278)
+	ucm,scm: UD mode creates many CR objects per EP that needs cleaned up
+	cma: add DAPL_CM_TOS environment variable to enable passing a TOS to the RDMA CM
+
+	Release 2.0.37
+	common: add support for ia name during dat_ia_query
+	common: dapl_os_atomic_inc/dec() not working as expected on ppc64 machines.
+	dapltest: ppc64 endian issue with exchanged mem handle and address
+
+	Release 2.0.36
+	scm: increase ACK timeout to 20 for a default value to match other providers.
+	common: allow qp modify in init state
+	common: check for valid states during ep posting
+	dat.conf: keep list of providers in order for backward compatibility
+	ucm: record and silently drop a duplicate reject CM message
+	windows: new version of getlocalipaddr not portable
+	dapltest: DFLT_QLEN is defined in multiple tests
+
+	Release 2.0.35
+	config/build: remove post/postun hacking used to modify dat.conf
+	config: clean up help option displays with ext-type options
+	windows: Provide auto-detect between RoCE and Infiniband for Windows.
+	ucm: update UD cm provider to support new CM stat and error counters
+	scm: update socket cm provider to support new CM stat and error counters
+	commom: add cm, link, and diag event counters in IB extended builds
+	scm: use ioctl SIOCIFCONF to get complete list of configured netdev interfaces
+	ucm: UD send failures at scale, ucm_send ERR: get_smsg(hd=149,tl=150)
+	scm: fix retry count on connection pending timeout
+	ucm: cleanup debug message, ntohl on p_size is incorrect
+	cma, scm, ucm: allow EP (QP) creation without EVD (CQ)
+	common: add DAPL_DBG_TYPE_CM_STATS (0x40000) to debug log options
+	common: dapls_ep_flush_cq will segfault when no CQ is attached to EP
+	common: ep_create should allow max_request_iov attribute setting of zero
+	common: add check for NULL handle on ext calls, SRQ free, and helper functions
+	common: add missing sub-types to dat_strerror()
+	common: extended CR event processing missing rejects on errors
+	ucm: incorrectly sends user reject during CR callback errors
+	common: change dbg level on CR callback if not listening on SP
+	scm: incorrectly sends user reject during CR callback errors
+	dat: add check for NULL handle on IA calls
+	cma,scm,ucm: extra reference on EP, with RSP, causes dat_ep_free() to hang
+	common: RSP service points incorrectly freed during CR callback
+	common: clean up dat_rsp_create log message
+	common: cleanup debug message on EVD overflows
+	scm: return correct event error code when remote host refuses requests
+	dapltest: server CR EVD is too small for multi-client configurations.
+	Common: CR EVD overflow causes segfault.
+
+	Release 2.0.34
+	scm: change debug message level for listen/bind errors
+	common: increase default IB ack timer from 16 to 20
+	common: remote ia address null pointer creates seg fault
+	common: posting events on full queue returns wrong error code
+	common: dat_ep_modify seg faults with null ep_param ptr
+	common: dat_evd_free seg faults with resized software EVD
+	common: remove assert for incorrect events during cm_request
+	dat: dat_cno_query with NULL cno_handle causes segmentation fault
+	scm: dat_psp_create returns wrong error code on bind/listen failure
+	scm: socket connect request count is reset improperly on retry
+	scm: when hostname has loopback addr assigned, default to eth0 instead of failing
+	scm: add port number to error log during hca_open failures
+	common: query calls return incorrect IA handle to consumer
+	common: srq create asserts with !dapl_llist_is_empty(head) failed
+
+	Release 2.0.33
+	scm,ucm: fix compatibility issues and set minimum protocol support
+	build: link librdmacm dependency to ib_acm usage for ucm and scm providers
+	build: add selective enable/disable-xxx build switch for each provider
+	build: add extended header files to EXTRA_DIST and fix missing backslash
+	build: set IB extended coll-type to none by default
+	common: change errno mapping of EINVAL to DAT_INVALID_PARAMETER
+	build: add IB collective and FCA provider to dapl build package as an option
+	common: add new dapls_evd_post_event_ext call for extended events
+	ucm: add support for IB collective providers
+	scm: add support for IB collective providers
+	cma: add support for IB collective providers
+	common: add supported collective types in named attributes for query
+	common: add collective call mappings via standard dapli_post_ext()
+	common: new debug bitmask definition for extension logging
+	common: new IB collective provider for Mellanox Fabric Collective Agent
+	dat: add definitions for MPI offloaded collectives in IB transport extensions
+	common: cleanup debug messages when building with ibacm feature
+
+	Release 2.0.32 fixes (OFED 1.5.3 GA): 
+
+	cma: reduce output log level in disconnect from WARN to CM_WARN 
+	ucm: delay freeing of active side UD cm object in case RTU is dropped 
+	ucm: cm object needs to be on work queue before req sent on wire 
+	ucm,scm: remove use of usec_sleep delays and use events for disc and destroy 
+	common: reduce default max inline data size because of performance anomaly 
+	common: dapls_evd_dto_wait() dbg message should print status and not errno 
+	ucm, scm: exchange max_qp_rd_atom and limit outstanding requests 
+	scm: retry socket connect on ECONNREFUSED under heavy load 
+	common: qp modify RTR using wrong ep attribute parameter for dest_rd_atomic 
+
+	Release 2.0.31 fixes (OFED 1.5.3 RC1): 
+
+	common: clean up build warning for unused variable event_ptr 
+	scm, ucm: set RAI_NOROUTE flag with rdma_getaddrinfo() call to avoid blocking. 
+	cma: definition for dapl_sp_remove_ep() is missing in cm.c 
+	libdat: static provider entries created for local SR database not freed 
+	libdat: memory leak in static registration during parsing 
+	common: increase default IB inline send threshold to 400 
+	common cq: a mixup of errno and the -1 return from poll in dapls_wait_comp_channel 
+	ucm: release UD cm objects after AH is exchanged to avoid duplicate request drops 
+	ucm: decrease timeout retry count for disconnect requests 
+	ucm: hold lock when sending cm_msgs to sync timer start with packet send 
+	ucm: add debugging to include process id for better scale up debug aids 
+	cma: disconnect can block for excessive times waiting for rdma_cm DREP timeout 
+	ucm: configure the recv channel FD to non-blocking 
+	windows: Missing librdmacm include path for build 
+	debug build: only timestamp if sending to stdout to avoid performance hit 
+	common: print out errors on free build and not just debug builds 
+	cma: fix debug build issue 
+	scm, ucm: MPI spawn test on oversubcribed server taking excessive time to complete 
+	common: add high resolution time stamps and thread id to sdtout debug logs 
+	common: modify debug in dat_evd_dequeue to reduce noise, only output on non-empty 
+	cma: rdma_destroy_id called twice during device open bind error 
+	common: dat_evd_dequeue (poll_cq) fails with invalid parameter after EP (qp) free 
+	ucm: allow configuration of CM burst (signal) threshold on posting 
+	cma: fix debug build 
+	windows: debug version of windows does not build. 
+	Allow DAPL out of band connection models to use ibacm to obtain path record data. 
+	ucm: add missing map file for UCM provider 
+	ibal: delay QP transition during disconnect phase 
+	Revert "ibal: delay QP transition during disconnect phase" 
+	ibal: delay QP transition during disconnect phase 
+	common: restructure EVD processing to handle EP destruction phase 
+	ibal: sync QP destruction and device close 
+	ucm: remove unnecessary debug warning in async callback 
+

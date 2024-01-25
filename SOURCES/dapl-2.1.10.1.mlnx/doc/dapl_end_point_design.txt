@@ -1,0 +1,1129 @@
+#######################################################################
+#                                                                     #
+# DAPL End Point Management Design                                    #
+#                                                                     #
+# Steve Sears                                                         #
+# sjs2 at users.sourceforge.net                                       #
+#                                                                     #
+# 10/04/2002                                                          #
+# Updates                                                             #
+#   02/06/04                                                          #
+#   10/07/04                                                          #
+#                                                                     #
+#######################################################################
+
+
+======================================================================
+Referenced Documents
+======================================================================
+
+uDAPL: User Direct Access Programming Library, Version 1.1.  Published
+05/08/2003.  http://www.datcollaborative.org/uDAPL_050803.pdf.
+Referred to in this document as the "DAT Specification".
+
+InfiniBand Access Application Programming Interface Specification,
+Version 1.2, 4/15/2002.  In DAPL SourceForge repository at
+doc/api/access_api.pdf.  Referred to in this document as the "IBM
+Access API Specification".
+
+InfiniBand Architecture Specification Volume 1, Release 1.0.a Referred
+to in this document at the "InfiniBand Spec".
+
+======================================================================
+Introduction to EndPoints
+======================================================================
+
+An EndPoint is the fundamental channel abstraction for the DAT API. An
+application communicates and exchanges data using an EndPoint. Most of
+the time EndPoints are explicitly allocated, but there is an exception
+whereby a connection event can yield an EndPoint as a side effect; this
+is not supported by all transports or implementations, but it is
+supported in the InfiniBand reference implementation.
+
+Each DAT API function is implemented in a file named 
+
+     dapl_<function name>.c
+
+There is a simple mapping provided by the dat library that maps dat_* to
+dapl_*.  For example, dat_pz_create is implemented in dapl_pz_create.c.
+Other examples:
+
+  DAT			 DAPL			 Found in
+  ------------		 ---------------	 ------------------
+  dat_ep_create          dapl_ep_create          dapl_ep_create.c
+  dat_ep_query           dapl_ep_query           dapl_ep_query.c
+
+There are very few exceptions to this naming convention, the Reference
+Implementation tried to be consistent.
+
+There are also dapl_<object name>_util.{h,c} files for each object.  For
+example, there are dapl_pz_util.h and dapl_pz_util.c files which contain
+common helper functions specific to the 'pz' subsystem.  The use of util
+files follows the convention used elsewhere in the DAPL reference
+implementation.  These files contain common object creation and
+destruction code, link list manipulation, other helper functions.
+
+This implementation has a simple naming convention designed to alert
+someone reading the source code to the nature and scope of a
+function. The convention is in the function name, such that:
+
+	dapl_	Primary entry from a dat_ function, e.g. 
+		dapl_ep_create(), which mirrors dat_ep_create(). 
+	dapls_	The 's' restricts it to the subsystem, e.g. the
+		'ep' subsystem. dapls_ functions are not exposed
+		externally, but are internal to dapl.
+	dapli_	The 'i' restricts the function to the file where it 
+		is declared. These functions are always 'static' C
+		functions.
+
+This convention is not followed as consistently as we would like, but is
+common in the reference implementation.
+
+1. End Points (EPs)
+-------------------------
+
+DAPL End Points provide a channel abstraction necessary to transmit and
+receive data. EPs interact with Service Points, either Public Service
+Points or Reserved Service Points, to establish a connection from one
+provider to another.
+
+The primary EP entry points in the DAT API as they relate to DAPL are
+listed in the following table:
+
+  dat_ep_create
+  dat_ep_query
+  dat_ep_modify
+  dat_ep_connect
+  dat_ep_dup_connect
+  dat_ep_disconnect
+  dat_ep_post_send
+  dat_ep_post_recv 
+  dat_ep_post_rdma_read
+  dat_ep_post_rdma_write
+  dat_ep_get_status
+  dat_ep_reset
+  dat_ep_free
+
+Additionally, the following connection functions interact with
+EndPoints:
+  dat_psp_create
+  dat_psp_query
+  dat_psp_free
+  dat_rsp_create
+  dat_rsp_query
+  dat_rsp_free
+  dat_cr_accept
+  dat_cr_reject
+  dat_cr_query
+  dat_cr_handoff
+
+The reference implementation maps the EndPoint abstraction onto an
+InfiniBand Queue Pair (QP).
+
+The DAPL_EP structure is used to maintain the state and components of
+the EP object and the underlying QP. As will be explained below, keeping
+track of the QP state is critical for successful operation. Access to
+the DAPL_EP fields are done atomically.
+
+
+======================================================================
+Goals
+======================================================================
+
+Initial goals
+-------------
+-- Implement all of the dat_ep_* calls described in the DAT
+   Specification. 
+
+-- Implement connection calls described in the DAT Specification with
+   the following exception:
+   - dat_cr_handoff. This is best done with kernel mediation, and is
+     therefore out of scope for the reference implementation.
+
+-- The implementation should be as portable as possible, to facilitate
+   HCA Vendors efforts to implement vendor-specific versions of DAPL.
+
+-- The implementation must be able to work during ongoing development
+   of provider software agents, drivers, etc.
+
+Later goals
+-----------
+-- Examine various possible performance optimizations.  This document
+   lists potential performance improvements, but the specific
+   performance improvements implemented should be guided by customer
+   requirements.  
+
+============================================
+Requirements, constraints, and design inputs
+============================================
+
+The EndPoint is the base channel abstraction. An Endpoint must be
+established before data can be exchanged with a remote node. The
+EndPoint is mapped to the underlying InfiniBand QP channel abstraction.
+When a connection is initiated, the InfiniBand Connection Manager will
+be solicited. The implementation is constrained by the capabilities and
+behavior of the underlying InfiniBand facilities.
+
+Note that transports other than InfiniBand may not need to rely on
+Connection Managers or other infrastructure, this is an artifact of
+this transport.
+
+An EP is not an exact match to an InfiniBand QP, the differences
+introduce constraints that are not obvious. There are three primary
+areas of conflict between the DAPL and InfiniBand models:
+
+1) EP and QP creation differences
+2) Provider provided EPs on passive side of connections
+3) Connection timeouts
+
+-- EP and QP creation
+
+The most obvious difference between an EP and a QP is the presence of a
+memory handle when the object is created. InfiniBand requires a
+Protection Domain (PD) be specified when a QP is created; in the DAPL
+world, a Protection Zone (PZ) maps to an InfiniBand Protection Domain.
+DAPL does not require a PZ to be present when an EP is created, and that
+introduces two problems:
+
+1) If a PZ is NULL when an EP is created, a QP will not be bound to
+   the EP until dat_ep_modify() is used to assign it later. A PZ is
+   required before RECV requests can be posted and before a connection
+   can be established.
+
+2) If a DAPL user changes the PZ on an EP before it is connected,
+   DAPL must release the current QP and create a new one with a
+   new Protection Domain.
+
+-- Provider provided EPs on connection
+
+The second area where the DAPL and IB models conflict is a direct result
+of the requirement to specify a Protection Domain when a QP is created.
+
+DAPL allows a PSP to be created in such a way that an EP will
+automatically be provided to the user when a connection occurs. This is
+not critical to the DAPL model but in fact does provide some convenience
+to the user. InfiniBand provides a similar mechanism, but with an
+important difference: InfiniBand requires the user to supply the
+Protection Domain for the passive connection endpoint that will be
+supplied to all QPs created as a result of connection requests; DAPL
+mandates a NULL PZ and requires the user to change the PZ before using
+the EP.
+
+The reference implementation creates an 'empty' EP when the user
+specifies the DAT_PSP_PROVIDER flag; it is empty in the sense that a QP
+is not attached to the EP. Before the user can dat_cr_accept the
+connection, the EP must be modified to have a PZ bound to it, which in
+turn will cause a QP to be bound to the EP.
+
+To keep track of the current state of the EP, the DAPL_EP structure
+has a qp_state field. The type of this field is specific to the
+provider and the states are provider-specified states for a particular
+transport, with the addition of a single state from dapl:
+DAPL_QP_STATE_UNATTACHED, indicating that no QP has been bound to the
+EP. The qp_state field is an open enumerator, containing a single DAPL
+state in addition states specified by the provider. 
+DAPL_QP_STATE_UNATTACHED is randomly defined to be 0xFFF0, a
+value selected strictly because it has the property that it will not
+collide with provider states; if this is not true, this value must be
+changed such that it is unique.
+
+The common layer of DAPL only looks at this single value for qp_state,
+it cannot be aware of states that are unique to the provider. However,
+the provider layer is free to update this field and may use it as a
+cache for current QP state. The field must be updated when a QP (or
+other endpoint resource) is bound to the EP.
+
+DAPL 1.2 provides DAT level states that will make this obsolete, but it
+exists in pre DAPL 1.2 code.
+
+
+-- Connection Timeouts
+
+The third difference in the DAPL and InfiniBand models has to do with
+timeouts on connections. InfiniBand does not provide a way to specify a
+connection timeout, so it will wait indefinitely for a connection to
+occur. dat_ep_connect supports a timeout value providing the user with
+control over how long they are willing to wait for a connection to
+occur.
+
+DAPL maintains a timer thread to watch over pending connections. A
+shared timer queue has a sorted list of timeout values. If a timeout
+is requested, dapl_ep_connect() will invoke dapls_timer_set(), which
+will add a timer record to the sorted list of timeouts. The timeout
+thread is started lazily: that is, it isn't started until a timeout is
+requested. Once a timeout has been requested, the thread will continue
+to exist until the application terminates.
+
+The timer record is actually a part of the DAPL_EP structure, so there
+are no extra memory allocations required for timeouts. dapls_timer_set()
+will initialize the timer record and insert it into the sorted queue at
+the appropriate place. If this is the first record, or is inserted
+before the first record (which will be the 'next' timeout to expire),
+the timer thread will be awakened so it can recalculate how long it must
+sleep until the timeout occurs.
+
+When a timeout does occur, the timeout code will cancel the connection
+request by invoking the provider routine dapls_ib_disconnect_clean(). 
+This allows the software module with explicit knowledge of the provider
+to take appropriate action and cancel the connection attempt. As a side
+effect, the EP will be placed into the UNCONNECTED state, and the QP
+will be in the ERROR state. A side effect of this state change is that
+all DTOs will be flushed. The provider must support a mechanism to 
+completely cancel a connection request.
+
+
+======================================================================
+DAPL EP Subsystem Design
+======================================================================
+
+In section 6.5.1 of the DAT Specification there is a UML state
+transition diagram for an EndPoint which goes over the transitions and
+states during the lifetime of an EP. It is nearly impossible to read.
+The reference implementation is faithful to the DAT Spec and is
+believed to be correct.
+
+This description of the EP will follow from creation to connection to
+termination. It will also discuss the source code organization as this
+is part of the design expression.
+
+-- EP and QP creation
+
+The preamble to creating an EP requires us to verify the attributes
+specified by the user. If a user were to specify max_recv_dtos as 0, for
+example, the EP would not be useful in any regard. If the user does not
+provide EP attrs, the DAPL layer will supply a set of common defaults
+resulting in a reasonable EP. The defaults are set up in 
+dapli_ep_default_attrs(), and the default values are given at the top of
+dapl_ep_util.c. Non-InfiniBand transports will want to examine these
+values to make sure they are 'reasonable'. This simplistic mechanism may
+change in the future.
+
+A number of handles are bound to the EP, so a reference count is taken
+on each of them. All reference counts in the DAPL system are incremented
+or decremented using atomic operations; it is important to always use
+the OS dependent atomic routines and not substitute a lock, as it will
+not be observed elsewhere in the system and will have unpredictable
+results.
+
+Reference counts are taken if there are non NULL values on any of:
+	  pz_handle
+	  connect_evd_handle
+	  recv_evd_handle
+	  request_evd_handle
+
+The purpose of reference counts should be obvious: to prevent premature
+release of resources that are still being used.
+
+As has been discussed above, each EP is bound to a QP before it can be
+connected. If a valid PZ is provided at creation time then a QP is bound
+to the EP immediately. If the user later uses ep_modify() to change the
+PZ, the QP will be destroyed and a new one created with the appropriate
+Protection Domain.
+
+Finally, an EP is an IA resource and is linked onto the EP chain of the
+superior IA. EPs linked onto an IA are assumed to be complete, so this
+is the final step of EP creation.
+
+After an EP is created, the ep_state will be DAT_EP_STATE_UNCONNECTED
+and the qp_state will either be DAPL_QP_STATE_UNATTACHED or assigned by
+the provider layer (e.g.IB_QP_STATE_INIT). The qp_state indicates the QP
+binding and the current state of the QP.
+
+A qp_state of DAPL_QP_STATE_UNATTACHED indicates there is no QP bound
+to this EP. This is a result of a NULL PZ when dat_ep_create() was
+invoked, and which has been explained in detail above. The user must
+call dat_ep_modify() and install a valid PZ before the EP can be used.
+
+When an InfiniBand QP is created it is in the RESET state, which is
+specified in the InfiniBand Spec, section 10.3. However, DAPL creates
+the EP in the UNCONNECTED state and requires an unconnected EP to be
+able to queue RECV requests before a connection occurs. The InfiniBand
+spec allows RECV requests to be queued on an QP if the QP is in the INIT
+state, so after creating a QP the DAPL provider code must transition it
+to the INIT state.
+
+There is a mapping between the DAPL EP state and the InfiniBand QP
+state. DAPL_QP_STATE_UNATTACHED indicates the underlying QP is in the
+INIT state. This is critical: RECV DTOs can be posted on an EP in the
+UNATTACHED state, so the underlying QP must be in the appropriate state
+to allow this to happen.
+
+There is an obvious design tradeoff in transitioning the QP
+state. Immediately moving the state to INIT takes extra time at creation
+but allows immediate posting of RECV operations; however, it will
+involve a more complex tear down procedure if the QP must be replaced as
+a side effect of a dat_ep_modify operation. The alternative would be to
+delay transitioning the QP to INIT until a post operation is invoked,
+but that requires a run time check for every post operation. This design
+assumes users will infrequently cause a QP to be replaced after it is
+created and prefer to pay the state transition penalty at creation time.
+
+-- EP Query and Modify operations
+
+Because all of the ep_param data are kept up to date in the dapl_ep
+structure, and because they use the complete DAT specified structure, a
+query operation is trivial; a simple assignment from the internal
+structure to the user parameter. uDAPL allows the implementation to
+either return the fields specified by the user, or to return more than
+the user requested; the reference implementation does the latter.  It is
+simpler and faster to copy the entire structure rather than to determine
+which of all of the possible fields the user requested.
+
+dat_ep_query() requires the implementation to report the address of the
+remote node, if the EP is connected. This is different from standard
+InfiniBand, if only because of the difference in name space. InfiniBand
+has the information on the remote LID, but it does not have the remote
+IP address, which is what DAT specifies. The reference implementation
+makes use of a lookup/name-service called ATS ( Address Translation
+Service), which is built using the InfiniBand Subnet Administrator. ATS
+is InfiniBand only, other transports will use a different mechanism.
+
+A driver will register itself and one or more IP addresses with ATS
+at some point before a connection can be made. How the addresses are
+provided to the driver, or how this is managed by the driver is not
+specified. The ATS proposal is available from the DAT Collaborative.
+
+When dat_ep_query() is invoked on a connected EP, it will request the
+remote address from the provider layer. The provider layer will use
+whatever means are necessary to obtain the IP address of the other end of
+the connection. The results are placed into a buffer that is part of the
+EP structure. Finally, the address of the EP structure is placed into
+the ep_param.remote_ia_address_ptr field.
+
+The ep_modify operation will modify the fields in the DAT_PARAM
+structure. There are some fields that cannot be updated, and there are
+others that can only be updated if the EP is in the correct state. The
+uDAPL spec outlines the EP states permitting ep modifications, but
+generally they are DAT_EP_STATE_UNCONNECTED and
+DAT_EP_STATE_PASSIVE_CONNECTION_PENDING.
+
+When replacing EVD handles it is a simple matter of releasing a
+reference on the previous handle and taking a new reference on the new
+handle. The Reference Implementation manages resource tracking using
+reference counts, which guarantees a particular handle will not be
+released prematurely. Reference counts are checked in the free routines
+of various objects.
+
+As has been mentioned previously, if the PZ handle is changed then the
+QP must be released, if already assigned, and a new QP must be created
+to bind to this EP.
+
+There are some fields in the DAT_PARAM structure that are related to the
+underlying hardware implementation. For these values DAPL will do a
+fresh query of the QP, rather than depend on stale values. Even so, the
+values returned are 'best effort' as a competing thread may change
+certain values before the requesting thread has the opportunity to read
+them. Applications should protect against this.
+
+Finally, the underlying provider is invoked to update the QP with new
+values, but only if some of the attributes have been changed.  As is
+true of most of the implementation, we only invoke the provider code
+when necessary.
+
+======================================================================
+Connections
+======================================================================
+
+There are of course two sides to a connection, and in the DAPL model
+there is an Active and a Passive side. For clarity, the Passive side
+is a server waiting for a connection, and the Active side is a client
+requesting a connection from the Passive server. We will discuss each
+of these in turn.
+
+Connections happen in the InfiniBand world by using a Connection Manager
+(CM) interface. Those unfamiliar with the IB model of addressing and
+management agents may want to familiarize themselves with these aspects
+of the IB spec before proceeding in this document. Be warned that the
+connection section of the IB spec is the most ambiguous portion of the
+spec.
+
+First, let's walk through a primitive diagram of a connection:
+
+
+SERVER (passive)                                CLIENT (active)
+---------------                                 ---------------
+1. dapl_psp_create
+   or dapl_rsp_create
+   [ now listening ]
+
+2.                                              dapl_ep_connect
+                           <-------------
+3. dapls_cr_callback
+   DAT_CONNECTION_REQUEST_EVENT
+   [ Create and post a DAT_CONNECTION_REQUEST_EVENT event ]
+
+4. Event code processing
+
+5. Create an EP if necessary
+   (according to the flags
+    when the PSP was created)
+
+6. dapl_cr_accept or dapl_cr_reject
+                           ------------->
+7.                                              dapl_evd_connection_callback
+                                                DAT_CONNECTION_EVENT_ESTABLISHED
+                                                [ Create and post a
+                                                  DAT_CONNECTION_EVENT_ESTABLISHED
+                                                  event ]
+
+8.                         <------------- RTU
+
+9. dapls_cr_callback
+   DAT_CONNECTION_EVENT_ESTABLISHED
+   [ Create and post a DAT_CONNECTION_EVENT_ESTABLISHED 
+     event ]
+
+10. ...processing...
+
+11. Either side issues a dat_ep_disconnect
+
+12.  dapls_cr_callback
+     DAT_CONNECTION_EVENT_DISCONNECTED
+
+   [ Create and post a 
+     DAT_CONNECTION_EVENT_DISCONNECTED
+     event ]
+
+13.                                             dapl_evd_connection_callback
+                                                DAT_CONNECTION_EVENT_DISCONNECTED
+                                                [ Create and post a
+                                                  DAT_CONNECTION_EVENT_DISCONNECTED
+                                                  event ]
+
+
+In the above diagram, time is numbered in the left hand column and is
+represented vertically.
+
+We will continue our discussion of connections using the above diagram,
+following a sequential order for connection establishment.
+
+There are in fact two types of service points detailed in the uDAPL
+specification. We will limit our discussion to PSPs for convenience, but
+there are only minor differences between PSPs and RSPs.
+
+The reader should observe that all passive-side connection events will
+be received by dapls_cr_callback(), and all active side connection
+events occur through dapl_evd_connection_callback(). At one point during
+the implementation these routines were combined as they are very
+similar, but there are subtle differences causing them to remain
+separate.
+
+Progressing through the series of events as outlined in the diagram
+above:
+
+1. dapl_psp_create
+
+   When a PSP is created, the final act will be to set it listening for
+   connections from remote nodes. It is important to realize that a
+   connection may in fact arrive from a remote node before the routine
+   setting up a listener has returned to dapl_psp_create; as soon as
+   dapls_ib_setup_conn_listener() is invoked connection callbacks may
+   arrive. To reduce race conditions this routine must be called as the
+   last practical operation when creating a PSP.
+
+   dapls_ib_setup_conn_listener() is provider specific. The key insight
+   is that the DAPL connection qualifier (conn_qual) will become the
+   InfiniBand Service ID. The passive side of the connection is now
+   listening for connection requests. It should be obvious that the
+   conn_qual must be unique.
+
+   InfiniBand allows a 64 bit connection qualifier, which is supported
+   by the DAT spec. IP based networks may be limited to 16 bits, so
+   provider implementations may want to return an error if it exceeds
+   the maximum allowable by the transport.
+
+2. dapl_ep_connect
+
+   The active side initiates a connection with dapl_ep_connect, which
+   will transition the EP into DAT_EP_STATE_ACTIVE_CONNECTION_PENDING.
+   Again, connections are in the domain of the providers' Connection
+   Manager and the mechanics are very much provider specific. The key
+   points are that a DAT_IA_ADDRESS_PTR must be translated to a GID
+   before a connection initiation can occur. This is discussed below.
+
+   InfiniBand supports different amounts of private data on various
+   connection functions. Other transports allow variable sizes of
+   private data with no practical limit.The DAPL connection code does
+   not enforce a fixed amount of private data, but rather makes
+   available to the user all it has available, as specified by
+   DAPL_MAX_PRIVATE_DATA_SIZE.
+
+   Private data will be stored in a fixed buffer as part of the
+   connection record, which is the primary reason to limit the size.
+
+   To assist development on new transports that do not have a full
+   connection infrastructure in place, there are a couple of compile time
+   flags that will include certain code: CM_BUSTED and
+   IBOSTS_NAMING. These are discussed below in more detail, but
+   essentially:
+
+   CM_BUSTED: fakes a connection on both sides of the wire, does not
+   transmit any private data.
+
+   IBHOSTS_NAMING: provides a simple IP_ADDRESS to LID translation
+   mechanism in a text file, which is read when the dapl library
+   loads. Private data is exchanged in this case, but it includes a
+   header that contains the remote IP address. Technically, this defines
+   a protocol and is in violation of the DAT spec, but it has proved
+   useful in development.
+
+3. dapls_cr_callback
+
+   The connection sequence is entirely event driven. An operation is
+   posted, then an asynchronous event will occur some time later. The
+   event may cause other actions to occur which may result in still
+   more events.
+
+   dapls_ib_setup_conn_listener() registered for a callback for
+   connection events, and we now receive a DAT event for a connection
+   request. The provider layer will translate the native event type to
+   a DAT event.
+
+   An upcall is invoked on the server side of the connection with an
+   event of type DAT_CONNECTION_REQUEST_EVENT. This is a unique event
+   in the callback code as it is the only case when an EP is not
+   already in play; in all other cases, it is possible to look up the
+   relevant EP for an operation.
+
+   Code exists to make sure the relevant connection object, the PSP or
+   RSP, is actually in a useful state and ready to be connected
+   to. One of the critical differences between a PSP and an RSP is
+   that an RSP is a one-shot connection object; once a connection
+   occurs, no other connections can be made to it.
+
+   There is a small difference in the InfiniBand and DAPL connection
+   models here as well. DAPL may disable a PSP at any time without
+   affecting current connections. When you tear down an InfiniBand
+   service endpoint, all of the connections are torn down too. Because
+   of this difference, when a DAPL app frees a PSP, only a state
+   change is made. The underlying service point is still available and
+   technically capable of receiving connections. If a connection
+   request arrives when the PSP is in this state, a rejection message
+   is sent such that the requesting node believes no service point is
+   listening.
+
+   Once the connection has been examined, it will continue with the
+   connection protocol. The EP will move to a CONNECTION_PENDING
+   state.
+
+   The connection request will cause a CR record to be allocated,
+   which holds all of the important connection request
+   information. The CR record will be linked onto the PSP structure
+   for retrieval in the future when other requests arrive.
+
+   The astute reader of the spec will observe that there is not a
+   dapl_cr_create call: CR records are created as part of a connection
+   attempt on the passive side of the connection. A CR is created now
+   and set up.  A point that will become important later, caps for
+   emphasis:
+
+   A CR WILL EXIST FOR THE LIFE OF A CONNECTION; THEY ARE DESTROYED AT
+   DISCONNECT TIME.
+
+   In the connection request processing a CR and an EVENT are created,
+   the event will be posted along with the connection information just
+   received.
+
+   Private data is also copied into the CR record. Private data
+   arrived with the connection request and is not a permanent
+   resource, so it is copied into the dapl space to be used at a later
+   time. Different transports have varying capabilities on the size of
+   private data, so a call to the provider is invoked to determine how
+   big it actually is. There is an upper bound on the amount of
+   private data the implementation will deal with, set at
+   DAPL_MAX_PRIVATE_DATA_SIZE (256 bytes at this writing).
+
+4. Event code processing
+
+   The final stage in a connection request is to generate an event on
+   a connection EVD using dapls_evd_post_cr_arrival_event().
+
+5. Create an EP if necessary
+
+   When the app processes a connection event, it needs to respond. If
+   the PSP is configured to create an EP automatically, the callback
+   code has already done it; creating an EP with no attached QP. Else,
+   the user must provide an EP to make the connection.
+
+   (4) and (5) are all done in user mode. The only interesting thing is
+   that when the user calls dat_cr_accept(), a ready EP must be
+   provided. If the EP was supplied by the PSP in the callback, it
+   must have a PZ associated with it and whatever other attributes
+   need to be set.
+
+6. dapl_cr_accept or dapl_cr_reject
+
+   For discussion purposes, we will follow the accept
+   path. dapl_cr_reject says you are done and there will be no further
+   events to deal with.
+
+   Assuming it accepts the connection for our example, the dapl code
+   will verify that an EP is in place and will deal with private data
+   that can be transmitted in a cr_accept call. The underlying
+   provider is invoked to complete this leg of the protocol.
+
+7. dapl_evd_connection_callback
+
+   An EVD callback is always a response to a connection oriented
+   request. As such, an EP is always present, and in fact is passed
+   into the upcall as the 'context' argument. 
+
+   Connection requests may take an arbitrary amount of time, so the EP
+   is always checked for a running timer when the upcall is made. As
+   has been discussed above, if a timer expires before an upcall
+   occurs, the connection must be completely canceled such that there
+   is no upcall.
+
+   The event signifying completion of the connection is
+   DAT_CONNECTION_EVENT_ESTABLISHED, and it will move the EP to the
+   CONNECTED state and post this event on the connection EVD. Private
+   data will be copied to an area in the EP structure, which is
+   persistent.
+
+   At this point, the EP is connected and the application is free to
+   post DTOs.
+
+8i. RTU
+
+   This item is labeled "8i" as it is internal to the InfiniBand
+   implementation, it is not initiated by dapl. The final leg of a
+   connection is an RTU sent from the initiating node to the server
+   node, indicating the connection has been made successfully.
+
+   Other transports may have a different connection protocol.
+
+9. dapls_cr_callback
+
+   When the RTU arrives, an upcall is invoked with a
+   DAT_CONNECTION_EVENT_ESTABLISHED event, which will be posted to the
+   connection EVD event queue. The EP is moved to the CONNECTED
+   state.
+
+   There is no private data for dapl to deal with, even though some
+   transports may provide private data at each step of a connection.
+
+   The connection activity is occurring on a separate channel than the
+   EP, so this is inherently a racy operation. The correct
+   application will always post RECV buffers on an EP before
+   initiating a connection sequence, as it is entirely possible for
+   DTOs to arrive *before* the final connection event arrives.
+
+   The architecturally interesting feature of this exchange occurs
+   because of differences in the InfiniBand and the DAT connection
+   models, which are briefly outlined here.
+
+   InfiniBand maintains the original connecting objects throughout the
+   life of the connection. That is, we originally get a callback event
+   associated with the Service (DAT PSP) that is listening for
+   connection events. A QP will be connected but the callback event
+   will still be received on the Service. Later, a callback event will
+   occur for a DISCONNECT, and again the Service will be the object of
+   the connection. In the DAPL implementation, the Service will
+   provide the PSP that is registered as listening on that connection
+   qualifier.
+
+   The difference is that DAT has a PSP receive a connection event,
+   but subsequently hands all connection events off to an EP. After a
+   dat_cr_accept is issued, all connection/disconnection events occur
+   on the EP. DAT more closely follows the IP connection model.
+
+   To support the DAT model, a CR is maintained through the life of
+   the connection. There is exactly one CR per connection, but any
+   number of CRs may exist for any given PSP. CRs are maintained on a
+   linked list pointed to by the PSP structure. A lookup routine will
+   match the cm_handle, unique for each connection, with the
+   appropriate CR. This allows us to find the appropriate EP which
+   will be used to create an event to be posted to the user.
+
+* dat_psp_destroy
+
+   It should be understood that the PSP will maintain all of the CR
+   records, and hence the PSP must persist until the final disconnect.
+   In the DAT model there is no association between a PSP and a
+   connected QP, so there is no reason not to destroy a PSP before the
+   final disconnect.
+
+   Because of the model mismatch we must preserve the PSP until the
+   final disconnect. If the user invokes dat_psp_destroy(), all of the
+   associations maintained by the PSP will be severed; but the PSP
+   structure itself remains as a container for the CR records. The PSP
+   structure maintains a simple count of CR records so we can easily
+   determine the final disconnect and release memory. Once a
+   disconnect event is received for a specific cm_handle, no further
+   events will be received and it is safe to discard the CR record.
+
+10. ...processing...
+
+   This is just a place holder to show that applications actually do
+   something after making a connection. They might not too...
+
+11. Either side issues a dat_ep_disconnect
+
+   dat_ep_disconnect() can be initiated by either side of a
+   connection.  There are two kinds of disconnect flags that can be
+   passed in, but the final result is largely the same.
+
+   DAT_CLOSE_ABRUPT_FLAG will cause the connection to be immediately
+   terminated. In InfiniBand terms, the QP is immediately moved to the
+   ERROR state, and after some time it will be moved to the RESET
+   state.
+
+   DAT_CLOSE_GRACEFUL_FLAG will allow in-progress DTOs to complete.
+   The underlying implementation will first transition the QP to the
+   SQE state, before going to RESET.
+
+   Both cases are handled by the underlying CM, there is no extra work
+   for DAPL.
+
+12. dapls_cr_callback
+
+   A disconnect will arrive on the passive side of the connection
+   through dapls_cr_callback() with connection event
+   DAT_CONNECTION_EVENT_DISCONNECTED. With this event the EP lookup
+   code will free the CR associated with the connection, and may free
+   the PSP if it is no longer listening, indicating it has been freed
+   by the application.
+
+   The callback will create and post a
+   DAT_CONNECTION_EVENT_DISCONNECTED event for the application.
+
+13. dapl_evd_connection_callback
+
+   The active side of the connection will receive
+   DAT_CONNECTION_EVENT_DISCONNECTED as the connection event for
+   dapl_evd_connection_callback(), and will create and post a
+   DAT_CONNECTION_EVENT_DISCONNECTED event.  Other than transitioning
+   the EP to the DISCONNECTED state, there is no further processing.
+
+
+Observe that there are a number of exception conditions resulting in a
+disconnect of the EP, most of which will generate unique DAT events
+for the application to deal with.
+
+
+* Addressing and Naming
+
+   The DAT Spec calls for a DAT_IA_ADDRESS_PTR to be an IP address,
+   either IPv4 or IPv6. It is in fact a struct sockaddr in most
+   systems. The dapl structures typically use IPv6 data types to
+   accommodate the largest possible addresses, but most implementations
+   use IPv4 formatted addresses.
+
+   InfiniBand uses a transport specific address known as a LID, which
+   typically is dynamically assigned by a Subnet Manager. Each HCA
+   also has a global address, similar to an Ethernet MAC address,
+   known as a GUID. ATS, mentioned above, is a mechanism using
+   InfiniBand infrastructure to map from GUID/LID to IP addresses. It
+   is not necessary for transports that use IP addresses natively,
+   such as Ethernet devices.
+
+   If a new implementation does not yet have a name service
+   infrastructure, the DAPL implementation provides a simple name
+   service facility under the #ifdef NO_NAME_SERVICE. This depends on
+   two things: valid IP addresses registered and available to standard
+   DNS system calls such as gethostbyname(); and a name/GID mapping
+   file.
+
+   IP addresses may be set up by system administrators or by a local
+   power-user simply by editing the values into the /etc/hosts file.
+   Setting IP addresses up in this manner is beyond the scope of this
+   document.
+
+   A simple mapping of names to GIDs is maintained in the ibhosts
+   file, currently located at /etc/dapl/ibhosts. The format of
+   the file is:
+
+   <IP name>     0x<GID Prefix>    0x<GUID>
+
+   For example:
+
+   dat-linux3-ib0p0 0xfe80000000000000 0x0001730000003d11
+   dat-linux3-ib0p1 0xfe80000000000000 0x0001730000003d11
+   dat-linux3-ib1   0xfe80000000000000 0x0001730000003d52
+   dat-linux5-ib0   0xfe80000000000000 0x0001730000003d91
+
+   And for each hostname, there must be an entry in the /etc/hosts file
+   similar to:
+
+   dat_linux3-ib0a	198.165.10.11
+   dat_linux3-ib0b	198.165.10.12
+   dat_linux3-ib1a	198.165.10.21
+   dat_linux5-ib0a	198.165.10.31
+
+
+   In this example we have adopted the convention of naming each
+   InfiniBand interface by using the form
+
+	      <node_name>-ib<device_number>[port_number]
+
+   In the above example we can see that the machine dat_linux3 has three
+   InfiniBand interfaces, which in this case we have named two ports on
+   the first HCA and another port on a second. Utilizing standard DNS
+   naming, the conventions used for identifying individual ports is
+   completely up to the administrator.
+
+   The GID Prefix and GUID are obtained from the HCA and map a port on
+   the HCA: together they form the GID that is required by a CM to
+   connect with the remote node.
+
+   The simple name service builds an internal table after processing
+   the ibhosts file which contains IP addresses and GIDs. It will use
+   the standard getaddrinfo() function to obtain IP address
+   information.
+
+   When an application invoked dat_ep_connect(), the
+   DAT_IA_ADDRESS_PTR will be compared in the table for a match and
+   the destination GID established if found. If the address is not
+   found then the user must first add the name to the ibhosts file.
+
+   With a valid GID for the destination node, the underlying CM is
+   invoked to make a connection.
+
+* Connection Management
+
+   Getting a working CM has taken some time, in fact the DAPL project
+   was nearly complete by the time a CM was available. In order to
+   make progress, a connection hack was introduced that allows
+   specific connections to take place. This is noted in the code by
+   the CM_BUSTED #def.
+
+   CM_BUSTED takes the place of a CM and will manually transition a QP
+   through the various states to connect: INIT->RTR->RTS. It will also
+   disconnect the connection, although the Torrent implementation
+   simply destroys the QP and recreates a new one rather than
+   transitioning through the typical disconnect states (which didn't
+   work on early IB implementations).
+
+   CM_BUSTED makes some assumptions about the remote end of the
+   connection as no real information is exchanged. The ibapi
+   implementation assumes both HCAs have the same LID, which implies
+   there is no SM running. The vapi implementation assumes the LIDs
+   are 0 and 1. Depending on the hardware, the LID value may in fact
+   not make any difference. This code does not set the Global Route
+   Header (GRH), which would cause the InfiniBand chip to be carefully
+   checking LID information.
+
+   The QP number is assumed to be identical on both ends of the
+   connection, or differing by 1 if this is a loopback. There is an
+   environment variable that will be read at initialization time if
+   you are configured with a loopback, this value is checked when
+   setting up a QP. The obvious downside to this scheme is that
+   applications must stay synchronized in their QP usage or the
+   initial exchange will fail as they are not truly connected.
+
+   Add to this the limitation that HCAs must be connected in
+   Point-to-Point topology or in a loopback. Without a GRH it will not
+   work in a fabric.  Again, using an SM will not work when CM_BUSTED
+   is enabled.
+
+   Despite these shortcomings, CM_BUSTED has proven very useful and
+   will remain in the code for a while in order to aid development
+   groups with new hardware and software. It is a hack to be sure, but
+   it is relatively well isolated.
+
+
+-- Notes on Disconnecting
+
+An EP can only be disconnected if it is connected or unconnected; you
+cannot disconnect 'in progress' connections. An 'in progress
+connection may in fact time out, but the DAT Spec does not allow you
+to 'kill' it. DAPL will use the CM interface to disconnect from the
+remote node; this of course results in an asynchronous callback
+notifying the application the disconnect is complete.
+
+Disconnecting an unconnected EP is currently the only way to remove
+pending RECV operations from the EP. The DAPL spec notes that all
+DTOs must be removed from an EP before it can be deallocated, yet
+there is no explicit interface to remove pending RECV DTOs. The user
+will disconnect an unconnected EP to force the pending operations off
+of the queue, resulting in DTO callbacks indicating an error. The
+underlying InfiniBand implementation will cause the correct behavior
+to result. When doing this operation the DAT_CLOSE flag is ignored,
+DAPL will instruct the provider layer to abruptly disconnect the QP.
+
+As has been noted previously, specifying DAT_CLOSE_ABRUPT_FLAG as the
+disconnect completion flag will cause the CM implementation to
+transition the QP to the ERROR state to abort all operations, and then
+transition to the RESET state; if the flag is DAT_CLOSE_GRACEFUL_FLAG,
+the CM will first move to the SQE state and allow all pending I/O's to
+drain before moving to the RESET state. In either case, DAPL only
+needs to know that the QP is now in the RESET state, as it will need
+to be transitioned to the INIT state before it can be used again.
+
+======================================================================
+Data Transfer Operations (DTOs)
+======================================================================
+
+The DTO code is a straightforward translation of the DAT_LMR_TRIPLET
+to an InfiniBand work request. Unfortunately, IB does not specify what
+a work request looks like so this tends to be very vendor specific
+code. Each provider will supply a routine for this operation.
+
+InfiniBand allows the DTO to attach a unique 64 bit work_req_id to
+each work request. The DAPL implementation will install a pointer to a
+DAPL_DTO_COOKIE in this field. Observe that a DAPL_DTO_COOKIE is not
+the same as the user DAT_DTO_COOKIE; indeed, the former has a pointer
+field pointing to the latter.  Different values will be placed in the
+cookie, according to the type of operation it is and the type of data
+required by its completion event. This is a simple scheme to bind DAPL
+data to the DTO and associated completion callback. Each DTO has a
+unique cookie associated with it.
+
+Observe that an InfiniBand work_request remains under control of the
+user, and when a post operation occurs the underlying implementation
+will copy data out of the work_request into a hardware based
+structure. Further, no application can perform a DTO operation on the
+same EP at the same time according to the thread guarantees mandated
+by the specification. This allows us to provide a recv_iov and a
+send_iov in the EP structure for all DTO operations, eliminating any
+malloc operations from this critical path.
+
+The underlying provider implementation will invoke
+dapl_evd_dto_callback() upon completion of DTO operations.
+dapl_evd_dto_callback() is the asynchronous completion for a DTO and
+will create and post an event for the user. Much of this callback is
+concerned with managing error completions.
+
+
+======================================================================
+Data Structure
+======================================================================
+
+The main data structure for an EndPoint is the dapl_ep structure,
+defined in include/dapl.h. The reference implementation uses the
+InfiniBand QP to maintain hardware state, providing a relatively
+simple mapping.
+
+/* DAPL_EP maps to DAT_EP_HANDLE */
+struct dapl_ep
+{
+    DAPL_HEADER			header;
+    /* What the DAT Consumer asked for */
+    DAT_EP_PARAM		param;
+
+    /* The RC Queue Pair (IBM OS API) */
+    ib_qp_handle_t		qp_handle;
+    unsigned int		qpn;	/* qp number */
+    ib_qp_state_t		qp_state;
+
+    /* communications manager handle (IBM OS API) */
+    ib_cm_handle_t		cm_handle;
+    /* store the remote IA address here, reference from the param
+     * struct which only has a pointer, no storage
+     */
+    DAT_SOCK_ADDR6		remote_ia_address;
+
+    /* For passive connections we maintain a back pointer to the CR */
+    void *			cr_ptr;
+
+    /* pointer to connection timer, if set */
+    struct dapl_timer_entry	*cxn_timer;
+
+    /* private data container */
+    DAPL_PRIVATE		private;
+
+    /* DTO data */
+    DAPL_ATOMIC			req_count;
+    DAPL_ATOMIC			recv_count;
+
+    DAPL_COOKIE_BUFFER		req_buffer;
+    DAPL_COOKIE_BUFFER		recv_buffer;
+
+    ib_data_segment_t 		*recv_iov;
+    DAT_COUNT			recv_iov_num;
+
+    ib_data_segment_t 		*send_iov;
+    DAT_COUNT			send_iov_num;
+#ifdef DAPL_DBG_IO_TRC
+    int			ibt_dumped;
+    struct io_buf_track *ibt_base;
+    DAPL_RING_BUFFER	ibt_queue;
+#endif /* DAPL_DBG_IO_TRC */
+};
+
+The simple explanation of the fields in the dapl_ep structure follows:
+
+header:	   The dapl object header, common to all dapl objects. 
+	   It contains a lock field, links to appropriate lists, and
+	   handles specifying the IA domain it is a part of.
+
+param:	   The bulk of the EP attributes called out in the DAT 
+	   specification and are maintained in the DAT_EP_PARAM
+	   structure. All internal references to these fields
+	   use this structure.
+
+qp_handle: Handle to the underlying InfiniBand provider implementation
+	   for a QP. All EPs are mapped to an InfiniBand QP.
+
+qpn:	   Number of the QP as returned by the underlying provider
+	   implementation. Primarily useful for debugging.
+
+qp_state:  Current state of the QP. The values of this field indicate
+	   if a QP is bound to the EP, and the current state of a
+	   QP.
+
+cm_handle: Handle to the IB provider's CMA (Connection Manager Agent).
+	   Used for CM operations used to connect and disconnect.
+
+remote_ia_address:
+	   Remote IP address of the connection. Only valid after the user
+	   has asked for it.
+
+cr_ptr:    Attaches the EP to the appropriate CR. Assigned on the passive
+	   side of a connection in cr_accept. It is used when an abrupt
+	   disconnect is invoked by the app, and we need to 'fake' a
+	   callback. It is also used in clean up of an EP and removing
+	   connection elements from the associated PSP.
+
+cxn_timer: Pointer to a timer entry, used as a token to set and remove
+	   timers.
+
+private:   Local Private data area on the active side of a connection.
+
+req_count: Count of outstanding request DTO operations, including memory
+	   ops. Atomically incremented/decremented.
+
+recv_count:Count of outstanding receive DTO operations. Atomically 
+		 incremented/decremented.
+
+req_buffer:Ring buffer of request cookies.
+
+recv_buffer:
+	   Ring buffer of receive cookies.
+
+recv_iov:  Storage for provider receive work request.
+
+recv_iov_num:
+	   Maximum number of receive IOVs. Number is obtained from
+	   the provider in a query.
+
+send_iov:  Storage for provider send work request.
+
+send_iov_num:
+	   Maximum number of send IOVs. Number is obtained from the
+	   provider in a query.
+
+ibt_dumped:DTO debugging aid. Boolean value to control how often DTO 
+	   tracing data is printed.
+
+ibt_base:  DTO debugging aid. Base address of DTO ring buffer containing
+	   information on DTO processing.
+   
+ibt_queue: Ring buffer containing information n DTO processing.
+
+
+** Debug
+
+The Reference Implementation includes a trace facility that allows a
+developer to see all DTO operations, specifically to catch those that
+are not completing as expected. The DAPL_DBG_IO_TRC conditional will
+enable this code.
+
+A simple ring buffer is used to account for all outstanding DTO
+traffic. The buffer may be dumped when DTOs are not getting
+completions, with enough data to aid the developer to determine where
+things went wrong.
+
+It is implemented as a ring buffer as there are often bugs in this
+part of a provider's implementation which do not manifest until
+intensive data exchange has occurred for many hours.

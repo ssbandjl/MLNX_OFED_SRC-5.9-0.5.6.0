@@ -1,0 +1,5 @@
+knem (1.1.4.90mlnx1-OFED.4.9.6.0.0.1) unstable; urgency=low
+
+  * Initial release. Closes: #194736
+
+ -- Alaa Hleihel <alaa@mellanox.com>  Mon, 6 May 2013 17:30:53 +0200

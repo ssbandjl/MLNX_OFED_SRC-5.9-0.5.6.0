@@ -1,0 +1,14 @@
+#if DBG
+LIBRARY dapl2-ofa-cmad.dll
+#else
+LIBRARY dapl2-ofa-cma.dll
+#endif
+
+
+EXPORTS
+dat_provider_init
+dat_provider_fini
+#ifdef DAT_EXTENSIONS
+dapl_extensions
+#endif
+

@@ -1,0 +1,14 @@
+Source: mlnx-ethtool
+Section: net
+Priority: optional
+Standards-Version: 4.5.0
+Build-Depends: debhelper, autoconf, automake, libmnl-dev, pkg-config
+Maintainer: Ben Hutchings <bwh@kernel.org>
+Homepage: https://ftp.kernel.org/pub/software/network/ethtool/
+
+Package: mlnx-ethtool
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: This utility allows querying and changing settings such as speed,
+ port, auto-negotiation, PCI locations and checksum offload on many
+ network devices, especially Ethernet devices.

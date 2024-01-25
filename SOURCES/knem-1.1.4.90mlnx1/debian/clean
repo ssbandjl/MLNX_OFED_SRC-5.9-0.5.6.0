@@ -1,0 +1,3 @@
+driver/linux/knem_main.o.ur-safe
+tools/check/*.sh
+knem-*.tar.gz

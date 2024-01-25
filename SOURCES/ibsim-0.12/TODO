@@ -1,0 +1,8 @@
+* transaction management
+  - multiple transactions per client
+  - hops simulation
+  - RMPP
+* more attributes handled
+* MKey support
+* cleaner (less) debug/warning messages
+* support for combined routing

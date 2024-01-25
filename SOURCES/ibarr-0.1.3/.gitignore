@@ -1,0 +1,55 @@
+# Object Files
+*.o
+*.lo
+*.la
+*.swp
+
+# Libraries
+*.lib
+*.a
+.libs
+
+# Shared objects
+*.so
+*.so.*
+
+# Dependencies
+.dirstamp
+.deps
+
+# Automake
+build/
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache/
+config.h
+config.log
+config.status
+config/
+configure
+libtool
+m4/
+stamp-h1
+compile
+depcomp
+install-sh
+ltmain.sh
+missing
+
+# Project/Eclipse
+.cproject
+.project
+
+#Ctags
+tags
+
+#Programs
+ibarr
+
+#Debian Stuff
+debian/*.log
+debian/files
+debian/*.substvars
+debian/.debhelper/
+debian/ibarr/

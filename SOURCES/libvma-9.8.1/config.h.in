@@ -1,0 +1,362 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_RX_CSUM_TCP_UDP_PKT is supported */
+#undef DEFINED_
+
+/* Direct VERBS support */
+#undef DEFINED_DIRECT_VERBS
+
+/* Define to 1 to use DPCP */
+#undef DEFINED_DPCP
+
+/* Define to 1 to hide symbols */
+#undef DEFINED_EXPORT_SYMBOL
+
+/* Define to 0 if enum value FRA_OIFNAME does not exist in linux/fib_rules.h
+   */
+#undef DEFINED_FRA_OIFNAME
+
+/* Define to 1 if attribute IBV_ACCESS_ALLOCATE_MR is supported */
+#undef DEFINED_IBV_ACCESS_ALLOCATE_MR
+
+/* Define to 1 if attribute struct mlx5dv_clock_info.last_cycles is supported
+   */
+#undef DEFINED_IBV_CLOCK_INFO
+
+/* Define to 1 if attribute IBV_EXP_CQ_MODERATION is supported */
+#undef DEFINED_IBV_CQ_ATTR_MODERATE
+
+/* Define to 1 if attribute IBV_EXP_CQ_TIMESTAMP is supported */
+#undef DEFINED_IBV_CQ_TIMESTAMP
+
+/* Define to 1 if attribute struct ibv_device_attr_ex.orig_attr is supported
+   */
+#undef DEFINED_IBV_DEVICE_ATTR_EX
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_CROSS_CHANNEL is supported */
+#undef DEFINED_IBV_DEVICE_CROSS_CHANNEL
+
+/* Define to 1 if attribute IBV_DEVICE_RAW_IP_CSUM is supported */
+#undef DEFINED_IBV_DEVICE_RAW_IP_CSUM
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_ATTR_MAX_DM_SIZE is supported */
+#undef DEFINED_IBV_DM
+
+/* Define to 1 if attribute IBV_EXP_ACCESS_ALLOCATE_MR is supported */
+#undef DEFINED_IBV_EXP_ACCESS_ALLOCATE_MR
+
+/* Define to 1 if Experimental Verbs CQ was enabled at configure time */
+#undef DEFINED_IBV_EXP_CQ
+
+/* Define to 1 if attribute IBV_EXP_CQ_MODERATION is supported */
+#undef DEFINED_IBV_EXP_CQ_MODERATION
+
+/* Define to 1 if attribute IBV_EXP_CQ_TIMESTAMP is supported */
+#undef DEFINED_IBV_EXP_CQ_TIMESTAMP
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_ATTR_MAX_DM_SIZE is supported */
+#undef DEFINED_IBV_EXP_DEVICE_ATTR_MAX_DM_SIZE
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_CROSS_CHANNEL is supported */
+#undef DEFINED_IBV_EXP_DEVICE_CROSS_CHANNEL
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_RX_CSUM_L4_PKT is supported */
+#undef DEFINED_IBV_EXP_DEVICE_RX_CSUM_L4_PKT
+
+/* Define to 1 if attribute IBV_EXP_DEVICE_RX_CSUM_TCP_UDP_PKT is supported */
+#undef DEFINED_IBV_EXP_DEVICE_RX_CSUM_TCP_UDP_PKT
+
+/* Define to 1 if attribute IBV_EXP_FLOW_SPEC_ACTION_TAG is supported */
+#undef DEFINED_IBV_EXP_FLOW_SPEC_ACTION_TAG
+
+/* Define to 1 if attribute IBV_EXP_FLOW_SPEC_IB is supported */
+#undef DEFINED_IBV_EXP_FLOW_SPEC_IB
+
+/* Define to 1 if attribute IBV_EXP_QP_INIT_ATTR_ASSOCIATED_QPN is supported
+   */
+#undef DEFINED_IBV_EXP_QP_INIT_ATTR_ASSOCIATED_QPN
+
+/* Define to 1 if attribute IBV_EXP_QP_RATE_LIMIT is supported */
+#undef DEFINED_IBV_EXP_QP_RATE_LIMIT
+
+/* Define to 1 if attribute IBV_EXP_QP_SUPPORT_BURST is supported */
+#undef DEFINED_IBV_EXP_QP_SUPPORT_BURST
+
+/* Define to 1 if attribute IBV_EXP_SEND_IP_CSUM is supported */
+#undef DEFINED_IBV_EXP_SEND_IP_CSUM
+
+/* Define to 1 if attribute IBV_EXP_VALUES_CLOCK_INFO is supported */
+#undef DEFINED_IBV_EXP_VALUES_CLOCK_INFO
+
+/* Define to 1 if attribute IBV_EXP_WR_NOP is supported */
+#undef DEFINED_IBV_EXP_WR_NOP
+
+/* Define to 1 if attribute IBV_EXP_WR_TSO is supported */
+#undef DEFINED_IBV_EXP_WR_TSO
+
+/* Define to 1 if attribute IBV_FLOW_SPEC_ACTION_TAG is supported */
+#undef DEFINED_IBV_FLOW_SPEC_ACTION_TAG
+
+/* Define to 1 if attribute IBV_EXP_FLOW_SPEC_IB is supported */
+#undef DEFINED_IBV_FLOW_SPEC_IB
+
+/* Define to 1 if attribute IBV_EXP_FLOW_SPEC_ACTION_TAG is supported */
+#undef DEFINED_IBV_FLOW_TAG
+
+/* Define to 1 if attribute IBV_EXP_QP_RATE_LIMIT is supported */
+#undef DEFINED_IBV_PACKET_PACING_CAPS
+
+/* Define to 1 if attribute IBV_QPT_RAW_PACKET is supported */
+#undef DEFINED_IBV_QPT_RAW_PACKET
+
+/* Define to 1 if attribute IBV_QP_CREATE_SOURCE_QPN is supported */
+#undef DEFINED_IBV_QP_CREATE_SOURCE_QPN
+
+/* Define to 1 if attribute IBV_EXP_QP_INIT_ATTR_ASSOCIATED_QPN is supported
+   */
+#undef DEFINED_IBV_QP_INIT_SOURCE_QPN
+
+/* Define to 1 if attribute IBV_EXP_QP_SUPPORT_BURST is supported */
+#undef DEFINED_IBV_QP_SUPPORT_BURST
+
+/* Define to 1 if attribute IBV_SEND_IP_CSUM is supported */
+#undef DEFINED_IBV_SEND_IP_CSUM
+
+/* Define to 1 if attribute IBV_WC_EX_WITH_COMPLETION_TIMESTAMP is supported
+   */
+#undef DEFINED_IBV_WC_EX_WITH_COMPLETION_TIMESTAMP
+
+/* Define to 1 if attribute IBV_WC_WITH_VLAN is supported */
+#undef DEFINED_IBV_WC_WITH_VLAN
+
+/* Define to 1 if attribute MLX5_OPCODE_NOP is supported */
+#undef DEFINED_IBV_WR_NOP
+
+/* Define to 1 if attribute IBV_WR_TSO is supported */
+#undef DEFINED_IBV_WR_TSO
+
+/* Define to 1 if linux/net_tstamp.h is missing */
+#undef DEFINED_MISSING_NET_TSTAMP
+
+/* Define to 1 if attribute MLX5_OPCODE_NOP is supported */
+#undef DEFINED_MLX5_OPCODE_NOP
+
+/* Define to 1 to disable thread locking */
+#undef DEFINED_NO_THREAD_LOCK
+
+/* Define to 1 if attribute IBV_WR_TSO is supported */
+#undef DEFINED_OPCODE_TSO
+
+/* Define to 1 if attribute struct mlx5dv_context.num_lag_ports is supported
+   */
+#undef DEFINED_ROCE_LAG
+
+/* Define to 1 to enable TCP Tx window availability */
+#undef DEFINED_TCP_TX_WND_AVAILABILITY
+
+/* Define to 1 to use TSO */
+#undef DEFINED_TSO
+
+/* Define found Verbs version */
+#undef DEFINED_VERBS_VERSION
+
+/* VMA Log All Definition */
+#undef DEFINED_VLOG_ALL
+
+/* VMA Log Debug Definition */
+#undef DEFINED_VLOG_DEBUG
+
+/* VMA Log Details Definition */
+#undef DEFINED_VLOG_DETAILS
+
+/* VMA Log Error Definition */
+#undef DEFINED_VLOG_ERROR
+
+/* VMA Log Fine Definition */
+#undef DEFINED_VLOG_FINE
+
+/* VMA Log Finer Definition */
+#undef DEFINED_VLOG_FINER
+
+/* VMA Log Info Definition */
+#undef DEFINED_VLOG_INFO
+
+/* VMA Log Init Definition */
+#undef DEFINED_VLOG_INIT
+
+/* VMA Log None Definition */
+#undef DEFINED_VLOG_NONE
+
+/* VMA Log Panic Definition */
+#undef DEFINED_VLOG_PANIC
+
+/* VMA Log Warning Definition */
+#undef DEFINED_VLOG_WARNING
+
+/* Define to 1 if attribute visibility is supported */
+#undef HAVE_ATTRIBUTE_VISIBILITY
+
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#undef HAVE_DLFCN_H
+
+/* Define to 1 if you have the `ibv_exp_get_device_list' function. */
+#undef HAVE_IBV_EXP_GET_DEVICE_LIST
+
+/* Define to 1 if you have the <infiniband/verbs.h> header file. */
+#undef HAVE_INFINIBAND_VERBS_H
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `dl' library (-ldl). */
+#undef HAVE_LIBDL
+
+/* Use libnl-1 */
+#undef HAVE_LIBNL1
+
+/* Use libnl-3 */
+#undef HAVE_LIBNL3
+
+/* Define to 1 if you have the `pthread' library (-lpthread). */
+#undef HAVE_LIBPTHREAD
+
+/* Define to 1 if you have the `rt' library (-lrt). */
+#undef HAVE_LIBRT
+
+/* Define to 1 if you have the `stdc++' library (-lstdc++). */
+#undef HAVE_LIBSTDC__
+
+/* Define to 1 if you have the <linux/ethtool.h> header file. */
+#undef HAVE_LINUX_ETHTOOL_H
+
+/* Define to 1 if you have the <linux/tls.h> header file. */
+#undef HAVE_LINUX_TLS_H
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the `rdma_lib_reset' function. */
+#undef HAVE_RDMA_LIB_RESET
+
+/* Define to 1 if you have the <rdma/rdma_cma.h> header file. */
+#undef HAVE_RDMA_RDMA_CMA_H
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if `comp_mask' is a member of `struct
+   ibv_query_device_ex_input'. */
+#undef HAVE_STRUCT_IBV_QUERY_DEVICE_EX_INPUT_COMP_MASK
+
+/* Define to 1 if the system has the type `struct mmsghdr'. */
+#undef HAVE_STRUCT_MMSGHDR
+
+/* Define to 1 if you have the <sys/capability.h> header file. */
+#undef HAVE_SYS_CAPABILITY_H
+
+/* Define to 1 if you have the <sys/fanotify.h> header file. */
+#undef HAVE_SYS_FANOTIFY_H
+
+/* Define to 1 if you have the <sys/inotify.h> header file. */
+#undef HAVE_SYS_INOTIFY_H
+
+/* Define to 1 if you have the <sys/prctl.h> header file. */
+#undef HAVE_SYS_PRCTL_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to 1 if you have the `__poll_chk' function. */
+#undef HAVE___POLL_CHK
+
+/* Define to 1 if you have the `__ppoll_chk' function. */
+#undef HAVE___PPOLL_CHK
+
+/* Define to 1 if you have the `__read_chk' function. */
+#undef HAVE___READ_CHK
+
+/* Define to 1 if you have the `__recvfrom_chk' function. */
+#undef HAVE___RECVFROM_CHK
+
+/* Define to 1 if you have the `__recv_chk' function. */
+#undef HAVE___RECV_CHK
+
+/* Define to 1 if attribute visibility is supported */
+#undef HAVE_visibility
+
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
+#undef LT_OBJDIR
+
+/* Define to 1 to disable Valgrind annotations. */
+#undef NVALGRIND
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* VMA Git Version */
+#undef PRJ_GIT_VERSION
+
+/* VMA Major Version */
+#undef PRJ_LIBRARY_MAJOR
+
+/* VMA Minor Version */
+#undef PRJ_LIBRARY_MINOR
+
+/* VMA Release */
+#undef PRJ_LIBRARY_RELEASE
+
+/* VMA Revision */
+#undef PRJ_LIBRARY_REVISION
+
+/* Define to 1 if 'struct timespec' for recvmmsg() is 'const struct timespec'
+   */
+#undef RECVMMSG_WITH_CONST_TIMESPEC
+
+/* Stats Protocol Version */
+#undef STATS_PROTOCOL_VER
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
+
+/* Version number of package */
+#undef VERSION
+
+/* Log optimization level */
+#undef VMA_MAX_DEFINED_LOG_LEVEL
+
+/* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
+   `char[]'. */
+#undef YYTEXT_POINTER

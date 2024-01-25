@@ -1,0 +1,131 @@
+.\" Manpage for rshim.
+.TH man 8 "18 Dec 2019" "2.0" "rshim man page"
+.SH NAME
+rshim \- user-space rshim driver for BlueField SoC
+.SH SYNOPSIS
+rshim [options]
+.SH DESCRIPTION
+rshim is the user-space rshim driver for BlueField SoC. It provides ways to access the rshim resources on the BlueField target via USB or PCIe from external host machine. The current version implements virtual console, virtual network interface, boot stream push, register access and some utility commands.
+
+This driver will probe the rshim backend and create directory /dev/rshim<N> for each of them with the following device files.
+
+.SS /dev/rshim<N>/boot
+Boot device file used to push boot stream to the target, for example,
+
+.in +4n
+.nf
+cat install.bfb > /dev/rshim<N>/boot
+
+.SS /dev/rshim<N>/console
+Console device file, which can be used by console tools to connect to the target, such as
+
+.in +4n
+.nf
+screen /dev/rshim<N>/console
+
+.SS /dev/rshim<N>/rshim
+Device file used to access rshim register space. When reading/writing to this file, the offset is encoded as "((rshim_channel << 16) | register_offset)". This file can be used by tools like openocd to do CoreSight debugging.
+
+.SS /dev/rshim<N>/misc
+Key/Value pairs used to read/write misc information. For example
+
+Display the output
+
+.in +4n
+.nf
+cat /dev/rshim0/misc
+    DISPLAY_LEVEL   0 (0:basic, 1:advanced, 2:log)
+    BOOT_MODE       1 (0:rshim, 1:emmc, 2:emmc-boot-swap)
+    BOOT_TIMEOUT    100 (seconds)
+    SW_RESET        0 (1: reset)
+    DEV_NAME        pcie-04:00.2
+    DEV_INFO        BlueField-1(Rev 0)
+.fi
+.in
+
+Initiate SW reset
+
+.in +4n
+.nf
+echo "SW_RESET 1" > /dev/rshim<N>/misc
+.fi
+.in
+
+Enable the advanced options
+
+.in +4n
+.nf
+echo "DISPLAY_LEVEL 1" > /dev/rshim<N>/misc
+
+cat /dev/rshim0/misc
+    DISPLAY_LEVEL   1 (0:basic, 1:advanced, 2:log)
+    BOOT_MODE       1 (0:rshim, 1:emmc, 2:emmc-boot-swap)
+    BOOT_TIMEOUT    100 (seconds)
+    SW_RESET        0 (1: reset)
+    DEV_NAME        pcie-04:00.2
+    DEV_INFO        BlueField-1(Rev 0)
+    PEER_MAC        00:1a:ca:ff:ff:01 (rw)
+    PXE_ID          0x00000000 (rw)
+    VLAN_ID         0 0 (rw)
+.fi
+.in
+.SH OPTIONS
+-b, --backend
+.in +4n
+Specify the backend to attach, which can be one of usb, pcie or pcie_lf. If not specified, the driver will scan all rshim backends unless the '-d' option is given with a device name specified.
+.in
+
+-d, --device
+.in +4n
+Specify the device name to attach with the format below. The backend driver can be deduced from the device name, thus the '-b' option is not needed.
+
+    PCIe backend:
+        pcie-<bus>:<device>.<function>. Example: pcie-04:00.2
+        Devices can be found with command 'lspci -n'.
+
+    PCIe backend in livefish mode:
+        pcie-lf-<bus>:<device>.<function>. Example: pcie-04:00.2
+        Devices can be found with command 'lspci -n'.
+
+    USB backend:
+        usb-<bus>-xx.xx. Example: usb-2-1.7
+        Devices can be found under /sys/bus/usb/devices/.
+.in
+
+-f, --foreground
+.in +4n
+Run in forground.
+.in
+
+-i, --index
+.in +4n
+Specify the index to create device path /dev/rshim<index>. It's also used to create network interface name tmfifo_net<index>. This option is needed when multiple rshim instances are running.
+.in
+
+-l, --log-level
+.in +4n
+Log level (0:none, 1:error, 2:warning, 3:notice, 4:debug)
+Log messages will be printed to standard output when running in foreground, or in syslog when running as a daemon.
+.in
+
+-v, --version
+.in +4n
+Display version
+.in
+.SH CONFIGURATION FILE
+Rshim configuration file (/etc/rshim.conf) can be used to specify the static mapping between rshim devices and rshim names. It can also be used to ignore some rshim devices.
+
+Example:
+.in +4n
+# Map usb-2-1.7 to rshim0
+.br
+rshim0       usb-2-1.7
+
+# Map pcie-0000:04:00.2 to rshim1
+.br
+rshim1       pcie-0000:04:00.2
+
+# Ignore usb-1-1.4
+.br
+none         usb-1-1.4
+.in
