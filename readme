@@ -16,6 +16,109 @@ MLNX_OFED_SRC-5.9-0.5.6.0
 tool:
 mlxdevm
 SOURCES/mlnx-iproute2-6.0.0/mlxdevm/mlxdevm.c
+static void help(void)
+
+main
+mlxdevm_init
+    mnlu_gen_socket_open
+    ifname_map_init
+mlxdevm_batch
+
+mlxdevm_cmd
+    cmd_port
+        MLXDEVM_CMD_PORT_NEW
+
+driver:
+SOURCES/mlnx-ofed-kernel-5.9/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
+mlxdevm_nl_cmd_port_new_doit
+    dev->ops->port_new -> mlx5_devm_sf_port_new
+        ...
+        mlx5_sf_add
+        mlx5_sf_table_put
+    mlxdevm_port_new_notifiy
+
+struct mlx5_sf *sf
+
+
+cmd list:
+enum mlxdevm_command {
+	MLXDEVM_CMD_UNSPEC =	0,
+
+	MLXDEVM_CMD_DEV_GET =	1,		/* can dump */
+	MLXDEVM_CMD_DEV_NEW =	3,
+
+	MLXDEVM_CMD_PORT_GET =	5,		/* can dump */
+	MLXDEVM_CMD_PORT_SET =	6,
+	MLXDEVM_CMD_PORT_NEW =	7,
+	MLXDEVM_CMD_PORT_DEL =	8,
+
+	MLXDEVM_CMD_PARAM_GET =	38,		/* can dump */
+	MLXDEVM_CMD_PARAM_SET =	39,
+	MLXDEVM_CMD_PARAM_NEW =	40,
+	MLXDEVM_CMD_PARAM_DEL =	41,
+
+	/* All upstream devlink commands must be added before with the exact
+	 * value as that of upstream without fail.
+	 * All devm specific must start after MLXDEVM_CMD_EXT_START.
+	 * Do not ever change the values. Only add at the end. Never in the
+	 * middle.
+	 */
+	MLXDEVM_CMD_EXT_START = 160,
+
+	MLXDEVM_CMD_EXT_CAP_SET,
+	MLXDEVM_CMD_EXT_RATE_NEW,
+	MLXDEVM_CMD_EXT_RATE_DEL,
+	MLXDEVM_CMD_EXT_RATE_GET,		/* can dump */
+	MLXDEVM_CMD_EXT_RATE_SET,
+
+	__MLXDEVM_CMD_MAX,
+	MLXDEVM_CMD_MAX = __MLXDEVM_CMD_MAX - 1
+};
+
+
+
+config tool:
+Configuration Using mlxdevm Tool
+Create the SF.
+
+SFs are managed using the mlxdevm tool supplied with iproute2 package. The tool is found at /opt/mellanox/iproute2/sbin/mlxdevm.
+
+An SF is created using the mlxdevm tool. The SF is created by adding a port of pcisf flavor.
+
+To create an SF port representor, run:
+
+/opt/mellanox/iproute2/sbin/mlxdevm port add pci/<pci_address> flavour pcisf pfnum <corresponding pfnum> sfnum <sfnum>
+
+
+rdma:
+ibv_post_send
+.post_send     = mlx5_post_send,
+
+
+mlx5_ib_post_send
+
+
+
+
+Nvidia 为 Infiniband 解决和路由用户空间解析服务
+这是一个用户空间应用程序，通过 NetLink 与 Linux RDMA 子系统进行交互，并提供 2 种服务：ip2gid（地址解析）和 gid2lid（PathRecord 解析）。
+
+
+KNEM 是一个 Linux 内核模块，支持大消息的高性能节点内 MPI 通信。 KNEM 适用于自 2.6.15 起的所有 Linux 内核，并支持异步和矢量数据传输以及将内存副本卸载到 Intel I/OAT 硬件。
+MPI 实现通常提供基于用户空间双副本的节点内通信策略。 它非常适合小消息延迟，但会浪费许多 CPU 周期、污染缓存并使内存总线饱和。 KNEM 通过 Linux 内核中的单个副本将数据从一个进程传输到另一个进程。 系统调用开销（目前大约为 100 纳秒）对于小消息延迟来说并不好，但拥有单个内存副本对于大消息（通常从几十 KB 开始）来说非常好。
+
+一些特定于供应商的 MPI 堆栈（例如 Myricom MX、Qlogic PSM 等）提供类似的功能，但它们只能在特定的硬件互连上运行，而 KNEM 是通用的（且开源的）。 此外，这些竞争对手都没有像 KNEM 那样提供异步完成模型、I/OAT 复制卸载和/或矢量内存缓冲区支持。
+
+
+NVIDIA Messaging Accelerator (VMA) 是动态链接的用户空间 Linux 库，用于透明地增强网络密集型应用程序的性能。 它提高了基于消息和流应用程序的性能，例如金融服务市场数据环境和 Web2.0 集群中的应用程序。它允许通过标准套接字 API 编写的应用程序从用户空间通过 Infiniband 和/或以太网运行，并具有完整的网络堆栈旁路。 与在标准以太网或 InfiniBand 互连网络上运行的应用程序相比，延迟减少了 300%，应用程序吞吐量增加了 200%，数据包速率更高，CPU 利用率更高
+
+加速 IO SW 库 (XLIO) 提高了通过标准套接字 API 编写的应用程序的性能，例如 Web 服务、反向代理、缓存、负载平衡、媒体流等。 通过完整的网络堆栈旁路和直接访问加速网络硬件，可以减少延迟、提高吞吐量和有效的 CPU 利用率。XLIO 在运行时与这些应用程序动态链接，重定向标准套接字 API 调用，使它们无需修改即可加速
+
+MSTFLINT 软件包 - 固件刻录和诊断工具1) 概述 该软件包包含适用于 Mellanox 制造的 HCA/NIC 卡的刻录工具和诊断工具。 它还提供对相关源代码的访问。 请参阅文件 LICENSE 了解许可详细信息。 该软件包基于 Mellanox 固件工具 (MFT) 软件包的子集。 有关 MFT 包的完整文档，请参阅 Mellanox 网站的下载页面。
+
+
+BlueField Rshim 主机驱动程序 rshim 驱动程序提供了一种从外部主机访问 BlueFieldtarget 上的 rshim 资源的方法。 当前版本实现了用于启动映像推送和虚拟控制台访问的设备文件。 它还创建虚拟网络接口来连接到 BlueField 目标，并提供访问内部 rshim 寄存器的方法
+
 
 
 
