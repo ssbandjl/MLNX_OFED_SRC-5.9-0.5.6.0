@@ -120,5 +120,18 @@ MSTFLINT 软件包 - 固件刻录和诊断工具1) 概述 该软件包包含适�
 BlueField Rshim 主机驱动程序 rshim 驱动程序提供了一种从外部主机访问 BlueFieldtarget 上的 rshim 资源的方法。 当前版本实现了用于启动映像推送和虚拟控制台访问的设备文件。 它还创建虚拟网络接口来连接到 BlueField 目标，并提供访问内部 rshim 寄存器的方法
 
 
+init driver:
+module_init(ib_uverbs_init);
+.write	 = ib_uverbs_write,
+	copy_from_user
+
+
+
+mlx5_ib_reg_user_mr
+
+
+debug log:
+mlx5_ib_dbg(dev, "start 0x%llx, virt_addr 0x%llx, length 0x%llx, access_flags 0x%x\n",
+
 
 
