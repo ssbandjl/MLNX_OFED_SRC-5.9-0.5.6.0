@@ -26,7 +26,7 @@ mlxdevm_batch
 
 mlxdevm_cmd
     cmd_port
-        MLXDEVM_CMD_PORT_NEW
+        MLXDEVM_CMD_PORT_NEW -> .doit = mlxdevm_nl_cmd_port_new_doit
 
 driver:
 SOURCES/mlnx-ofed-kernel-5.9/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
@@ -133,5 +133,18 @@ mlx5_ib_reg_user_mr
 debug log:
 mlx5_ib_dbg(dev, "start 0x%llx, virt_addr 0x%llx, length 0x%llx, access_flags 0x%x\n",
 
+
+
+mlxconfig
+
+SOURCES\mlnx-ofed-kernel-5.9\drivers\net\ethernet\mellanox\mlx5\core\Kconfig
+enable sf:
+MLX5_ESWITCH
+MLX5_SF
+
+
+mst start
+
+Mellanox Configuration Registers Access tool
 
 
