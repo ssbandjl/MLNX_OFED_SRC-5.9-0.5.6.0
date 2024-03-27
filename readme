@@ -148,3 +148,101 @@ mst start
 Mellanox Configuration Registers Access tool
 
 
+tcpdump, ibdump
+SOURCES\ibdump-6.0.0\ibdump.c
+ibdump -h
+usage
+--max-burst
+
+
+rdma statistic
+
+
+static const struct mlx5_ib_counter basic_q_cnts[] = {
+	INIT_Q_COUNTER(rx_write_requests),
+	INIT_Q_COUNTER(rx_read_requests),
+	INIT_Q_COUNTER(rx_atomic_requests),
+	INIT_Q_COUNTER(out_of_buffer),
+};
+
+
+SOURCES\mlnx-iproute2-6.0.0\rdma\stat.c
+stat_qp_set_link_auto_sendmsg
+
+
+mlx5_ib_fill_counters
+
+
+
+static const struct ib_device_ops hw_stats_ops = {
+	.alloc_hw_port_stats = mlx5_ib_alloc_hw_port_stats,
+	.get_hw_stats = mlx5_ib_get_hw_stats,
+	.counter_bind_qp = mlx5_ib_counter_bind_qp,
+	.counter_unbind_qp = mlx5_ib_counter_unbind_qp,
+	.counter_dealloc = mlx5_ib_counter_dealloc,
+	.counter_alloc_stats = mlx5_ib_counter_alloc_stats,
+	.counter_update_stats = mlx5_ib_counter_update_stats,
+	.modify_hw_stat = IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS) ?
+			  mlx5_ib_modify_stat : NULL,
+};
+
+
+
+
+fill_res_counter_entry
+	rdma_counter_query_stats
+
+
+counter_history_stat_update
+
+
+
+RDMA_NLDEV_CMD_STAT_SET
+
+
+
+
+rdma statistic set link
+
+static int rd_cmd(struct rd *rd, int argc, char **argv)
+{
+	const struct rd_cmd cmds[] = {
+		{ NULL,		cmd_help },
+		{ "help",	cmd_help },
+		{ "dev",	cmd_dev },
+		{ "link",	cmd_link },
+		{ "resource",	cmd_res },
+		{ "system",	cmd_sys },
+		{ "statistic",	cmd_stat },
+
+
+static int stat_set(struct rd *rd)
+{
+	const struct rd_cmd cmds[] = {
+		{ NULL,		stat_help },
+		{ "link",	stat_set_link },
+		{ "help",	stat_help },
+		{ 0 },
+	};
+	return rd_exec_cmd(rd, cmds, "parameter");
+}
+stat_set_link
+	stat_one_set_link
+		stat_one_set_link_opcounters
+		RDMA_NLDEV_CMD_STAT_GET
+		nldev_stat_get_doit
+			stat_get_doit_default_counter
+				rdma_counter_get_hwstat_value
+					rdma_counter_query_stats
+						mlx5_ib_counter_update_stats
+							mlx5_ib_query_q_counters
+
+
+rdma statistic man, 
+SOURCES\mlnx-iproute2-6.0.0\man\man8\rdma-statistic.8
+
+
+
+mlx5_ib_counters_init
+	mlx5_ib_alloc_counters
+
