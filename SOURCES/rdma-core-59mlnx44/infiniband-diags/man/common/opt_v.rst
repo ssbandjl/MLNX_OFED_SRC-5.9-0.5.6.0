@@ -1,6 +1,4 @@
-.. Define the common option -v
+.. Define the common option -V
 
-**-v, --verbose**
-        increase the application verbosity level.
-        May be used several times (-vv or -v -v -v)
+**-V, --version**     show the version info.
 

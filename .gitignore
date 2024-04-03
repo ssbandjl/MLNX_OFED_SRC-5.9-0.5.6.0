@@ -1,2 +1,3 @@
 *.gz
 *.tgz
+.vscode

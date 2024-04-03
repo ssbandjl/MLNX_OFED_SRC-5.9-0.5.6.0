@@ -143,9 +143,43 @@ MLX5_ESWITCH
 MLX5_SF
 
 
-mst start
+mlnxofedinstall
+mst start -> which mst -> /usr/bin/mst
+
+mst status
+
+query status of dev:
+mlxconfig -d /dev/mst/mt4115_pciconf0 q
+
+mlxconfig -d /dev/mst/mt4115_pciconf0 set SRIOV_EN=1 NUM_OF_VFS=4
+
+lspci -D | grep Mellanox
+
+ibstat
+
+ibdev2netdev
+
+./mlnxofedinstall --enable-sriov --hypervisor
+
+/etc/init.d/openibd restart
+
+locate pci.ids
+
+update-pciids
 
 Mellanox Configuration Registers Access tool
+
+
+nic=ens785f1
+cat /sys/class/net/${nic}/device/sriov_totalvfs
+cat /sys/class/infiniband/mlx5_1/device/mlx5_num_vfs
+cat /sys/class/net/${nic}/device/sriov_numvfs
+cat /sys/class/net/${nic}/device/mlx5_num_vfs
+
+lspci -D | grep Mellanox
+
+echo "ON" > /sys/class/net/ens785f1/device/sriov/0/trust
+echo "OFF" > /sys/class/net/ens785f1/device/sriov/0/trust 
 
 
 tcpdump, ibdump
@@ -153,6 +187,61 @@ SOURCES\ibdump-6.0.0\ibdump.c
 ibdump -h
 usage
 --max-burst
+
+
+
+SOURCES/ibdump-6.0.0/ibdump.c -> main
+(void)hw_sniffer_on;
+getopt_long
+csv_to_num_array
+resources_init
+resources_create
+    fopen
+    ibv_get_device_list
+    ibv_alloc_pd
+    mtu_enum_to_num
+    tmp = (char*)(((u_int64_t)tmp + 0x1000) & ~0xfff)
+    mr_flags = IBV_ACCESS_LOCAL_WRITE
+    ibv_reg_mr
+    qp_init_attr.qp_type = IBV_QPT_UD;
+    ibv_create_qp
+write_to_file
+connect_qp
+    modify_qp_to_init
+    post_receive
+		sge.addr = (uintptr_t)(res->buf[idx])
+		rr.sg_list = &sge
+		ibv_post_recv
+    modify_qp_to_rtr
+fw_version_less_than
+set_sw_sniffer
+	fifth_gen_set_sw_sniffer
+		mwrite4(res->mf, 0x23f0, 0xbadc0ffe)
+		gcif_set_port_sniffer
+	or
+	fourth_gen_set_sw_sniffer
+		flow_attr.type = IBV_FLOW_ATTR_SNIFFER
+		ibv_create_flow
+set_pcap_header
+	fwrite
+while
+	poll_completion
+		ibv_poll_cq
+		 fwrite(hdr, header_size, 1, f)
+	post_receive
+
+
+
+
+fifth_gen_set_sw_sniffer
+	gcif_set_port_sniffer
+	fprintf(stderr, "Failed to set port sniffer1: %s\n", gcif_err_str(rc))
+
+int gcif_set_port_sniffer(mfile* mf, struct connectib_icmd_set_port_sniffer* set_port_sniffer)
+{
+    SEND_ICMD_FLOW(mf, SET_PORT_SNIFFER, connectib_icmd_set_port_sniffer, set_port_sniffer, 1, 0);
+}
+
 
 
 rdma statistic
@@ -245,4 +334,52 @@ SOURCES\mlnx-iproute2-6.0.0\man\man8\rdma-statistic.8
 
 mlx5_ib_counters_init
 	mlx5_ib_alloc_counters
+
+
+
+cap:
+--max-burst
+
+
+WITHOUT_FW_TOOLS
+
+
+sriov:
+mst status
+
+mst start -> /usr/bin/mst
+action()
+PYTHON_EXEC=`find /usr/bin /bin/ /usr/local/bin -iname 'python*' 2>&1 | grep -e='*python[0-9,.]*' | sort -d | head -n 1`
+MST_CONF=/etc/mft/mst.conf
+prog="MST (Mellanox Software Tools) driver set"
+###########
+case "$1" in
+    start)
+        check_start_args $2
+            read -r -a start_flags <<< "${MST_START_FLAGS}"
+            for flag in "${start_flags[@]}"
+        start $2 $3 -> start()
+            check_conf $MST_CONF
+            load_module "${MST_PCI_MOD}"     "${MST_PCI_MOD}"     "${modprobe}"  "Loading MST PCI module" $with_unknwon_id
+                modprobe
+            create_devices "Create devices"  $with_msix $with_unknwon_id
+                create_pci_devices
+                create_mtusb_devices
+                create_ndc_devices
+
+
+
+mst status -> 
+status)
+print_status $2
+    is_module
+    mdevices_info $verbose
+    print_ul_mdevices_info
+    ${PYTHON_EXEC} ${MFT_PYTHON_TOOLS}/gearbox/gearbox_status_script.py
+    ${PYTHON_EXEC} ${MFT_PYTHON_TOOLS}/mst_retimer/mst_retimer.py status
+
+
+
+
+./mlnxofedinstall --fw-image-dir /tmp/my_fw_bin_files
 
