@@ -1,0 +1,22 @@
+本文列出了 ConnectX-4 和 ConnectX-4 Lx 上基于 libibverbs（libibverbs 使用 libmlx5）的每个流（发送队列）数据包调速（流量整形）的配置步骤。 MLNX_OFED v3.4 及更高版本支持此功能。 这篇文章与上游驱动程序版本（不同的 API）无关。 假设读者是了解数据包节奏配置的开发人员，如如何配置中所述
+
+
+应用程序可以在调用 ibv_exp_modify_qp 时通过 ibv_exp_qp_attr->burst_info 配置 max_burst_sz 和 generic_pkt_sz，并设置 attr_mask IBV_EXP_QP_RAET_LIMIT 和 comp_mask IBV_EXP_QP_ATTR_BURST_INFO。 请注意，rate_limit 必须是非 0 值才能配置突发信息。
+
+max_burst_sz：设备将为连接到该速率的QP调度数据包突发，小于或等于该值。 值 0x0 表示数据包突发将限制为设备默认值。 如果数据包突发必须严格保持在某个值以下，则应使用此字段。
+
+典型_pkt_sz：当速率限制针对相似数据包流时，说明典型数据包大小可以提高速率限制器的准确性。 对于与相同速率限制索引关联的所有 QP，预期数据包大小将相同。
+
+例子：
+
+下面的示例取自原始以太网编程：基本介绍 - 代码示例中的完整示例，并进行了一些修改以匹配此功能。 请参阅第 6-8 节中红色更改的发件人示例。
+
+1. 将 QP 移至“准备接收”(IBV_QPS_RTR)。
+
+2. 将 QP 移至“准备发送”(IBV_QPS_RTS)
+
+3. 设置速率限制 (qp_attr.rate_limit)（以 Kb/s 为单位）。
+
+注意：IBV_QP_STATE 是 qp_flags 中的必需参数。
+
+

@@ -1,0 +1,3 @@
+https://enterprise-support.nvidia.com/s/article/understanding-on-demand-paging--odp-x
+
+按需分页 (ODP) 是一种简化内存注册的技术。 应用程序不需要确定地址空间的底层物理页，也不需要跟踪映射的有效性。 相反，当页面不存在时，HCA（主机通道适配器）会向操作系统请求最新的转换，并且操作系统会因页面不存在或映射更改而使不再有效的转换无效。 这篇文章面向 IB 动词开发人员

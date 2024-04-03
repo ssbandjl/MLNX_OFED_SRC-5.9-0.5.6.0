@@ -1,3 +1,22 @@
+编译驱动: https://enterprise-support.nvidia.com/s/article/howto-compile-mlnx-ofed-for-different-linux-kernel-distribution--160---160-x
+./mlnxofedinstall --add-kernel-support
+
+modinfo mlx4_core | head
+
+# rpmbuild --rebuild --define "_topdir $PWD/kernel" --nodeps --define '_dist %{nil}' --define 'configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx4_vnic-mod --with-mlx5-mod --with-cxgb3-mod --with-cxgb4-mod --with-nes-mod --with-ipoib-mod --with-amso1100-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-e_ipoib-mod --with-nfsrdma-mod --with-9pnet_rdma-mod --with-9p-mod --with-cxgb3i-mod --with-cxgb4i-mod ' --define '_prefix /usr' SRPMS/mlnx-ofa_kernel-*.src.rpm
+
+
+
+# /etc/infiniband/info
+
+prefix=/usr
+
+Kernel=2.6.32-573.el6.ppc64
+
+Configure options: --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx4_vnic-mod --with-mlx5-mod --with-cxgb3-mod --with-cxgb4-mod --with-nes-mod --with-ipoib-mod --with-amso1100-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-e_ipoib-mod --with-nfsrdma-mod --with-9pnet_rdma-mod --with-9p-mod --with-cxgb3i-mod --with-cxgb4i-mod
+
+
+
 install on comm version:
 ./install.pl <option 1> <option 2> .
 ./install.pl --help
@@ -382,4 +401,7 @@ print_status $2
 
 
 ./mlnxofedinstall --fw-image-dir /tmp/my_fw_bin_files
+
+
+SOURCES\ofed-scripts-5.9\mlnxofedinstall
 
