@@ -404,4 +404,29 @@ print_status $2
 
 
 SOURCES\ofed-scripts-5.9\mlnxofedinstall
+--add-kernel-support
 
+
+
+rdma link add rxe_eth0 type rxe netdev eth0
+SOURCES\mlnx-iproute2-6.0.0\rdma\rdma.c -> main
+rd_cmd
+int cmd_link(struct rd *rd)
+	const struct rd_cmd cmds[] = {
+		{ NULL,		link_show },
+		{ "add",	link_add },
+		{ "delete",	link_del },
+		{ "show",	link_show },
+		{ "list",	link_show },
+		{ "help",	link_help },
+		{ 0 }
+	};
+
+static int link_add(struct rd *rd)
+	link_add_type
+		link_add_netdev
+			rd_prepare_msg(rd, RDMA_NLDEV_CMD_NEWLINK, &seq,   -> to kernel to kernel 转到内核 rxe_newlink
+			mnl_attr_put_strz(rd->nlh, RDMA_NLDEV_ATTR_DEV_NAME, rd->link_name)
+			mnl_attr_put_strz(rd->nlh, RDMA_NLDEV_ATTR_LINK_TYPE, rd->link_type)
+			mnl_attr_put_strz(rd->nlh, RDMA_NLDEV_ATTR_NDEV_NAME, link_netdev)
+			rd_sendrecv_msg(rd, seq)
