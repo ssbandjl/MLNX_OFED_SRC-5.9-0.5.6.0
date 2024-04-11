@@ -1,3 +1,6 @@
+https://github.com/ssbandjl/MLNX_OFED_SRC-5.9-0.5.6.0.git
+
+
 编译驱动: https://enterprise-support.nvidia.com/s/article/howto-compile-mlnx-ofed-for-different-linux-kernel-distribution--160---160-x
 ./mlnxofedinstall --add-kernel-support
 
@@ -410,7 +413,15 @@ SOURCES\ofed-scripts-5.9\mlnxofedinstall
 
 rdma link add rxe_eth0 type rxe netdev eth0
 SOURCES\mlnx-iproute2-6.0.0\rdma\rdma.c -> main
-rd_cmd
+rd_init(&rd, filename)
+	rd_prepare_msg(rd, RDMA_NLDEV_CMD_GET
+	rd_send_msg
+		mnlu_socket_open(NETLINK_RDMA) -> rdma：允许按需加载 NETLINK_RDMA，提供模块别名，以便如果用户空间打开 RDMA 的 netlink 套接字，则会自动加载内核支持
+			mnl_socket_open
+		mnl_socket_sendto
+	rd_recv_msg(rd, rd_dev_init_cb, rd, seq)
+rd_batch
+or rd_cmd
 int cmd_link(struct rd *rd)
 	const struct rd_cmd cmds[] = {
 		{ NULL,		link_show },
