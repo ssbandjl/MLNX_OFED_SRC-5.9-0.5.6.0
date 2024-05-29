@@ -125,6 +125,8 @@ mlx5_ib_post_send
 Nvidia 为 Infiniband 解决和路由用户空间解析服务
 这是一个用户空间应用程序，通过 NetLink 与 Linux RDMA 子系统进行交互，并提供 2 种服务：ip2gid（地址解析）和 gid2lid（PathRecord 解析）。
 
+消息传递接口 (MPI) 是一种库规范，它支持开发并行软件库以利用并行计算机、集群和异构网络。Mellanox OFED 包括以下基于 InfiniBand 的 MPI 实现：, Open MPI – Open MPI 项目的开源 MPI-2 实现  Mellanox OFED 还包括 MPI 基准测试，例如 OSU BW/LAT、Intel MPI BeBenchmark 和 Presta
+
 
 KNEM 是一个 Linux 内核模块，支持大消息的高性能节点内 MPI 通信。 KNEM 适用于自 2.6.15 起的所有 Linux 内核，并支持异步和矢量数据传输以及将内存副本卸载到 Intel I/OAT 硬件。
 MPI 实现通常提供基于用户空间双副本的节点内通信策略。 它非常适合小消息延迟，但会浪费许多 CPU 周期、污染缓存并使内存总线饱和。 KNEM 通过 Linux 内核中的单个副本将数据从一个进程传输到另一个进程。 系统调用开销（目前大约为 100 纳秒）对于小消息延迟来说并不好，但拥有单个内存副本对于大消息（通常从几十 KB 开始）来说非常好。
@@ -441,3 +443,78 @@ static int link_add(struct rd *rd)
 			mnl_attr_put_strz(rd->nlh, RDMA_NLDEV_ATTR_LINK_TYPE, rd->link_type)
 			mnl_attr_put_strz(rd->nlh, RDMA_NLDEV_ATTR_NDEV_NAME, link_netdev)
 			rd_sendrecv_msg(rd, seq)
+
+
+mpi, 
+mca_btl_openib_endpoint_post_send
+
+...
+static inline int post_send(mca_btl_openib_endpoint_t *ep,
+	ib_send_flags
+	ibv_post_send(ep->qps[qp].qp->lcl_qp, sr_desc, &bad_wr)
+
+
+
+
+
+mca_btl_openib_component_t mca_btl_openib_component = {
+    .super = {
+        /* First, the mca_base_component_t struct containing meta information
+           about the component itself */
+
+        .btl_version = {
+            MCA_BTL_DEFAULT_VERSION("openib"),
+            .mca_open_component = btl_openib_component_open,
+            .mca_close_component = btl_openib_component_close,
+            .mca_register_component_params = btl_openib_component_register,
+        },
+        .btl_data = {
+            /* The component is checkpoint ready */
+            .param_field = MCA_BASE_METADATA_PARAM_CHECKPOINT
+        },
+
+        .btl_init = btl_openib_component_init,
+        .btl_progress = btl_openib_component_progress,
+    }
+};
+
+
+
+SOURCES\ucx-1.15.0\src\tools\perf\perftest.c -> int main(int argc, char **argv)
+	#ifdef HAVE_MPI
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided)
+	ompi_mpi_init
+	mca_bml_base_init
+	mca_btl_base_select
+	.btl_progress = btl_openib_component_progress
+		progress_one_device
+			poll_device
+				handle_wc
+					mca_btl_openib_endpoint_connect_eager_rdma
+						mca_btl_openib_endpoint_send_eager_rdma
+	
+
+
+
+
+
+mca_btl_ofi_component_init
+	mca_btl_ofi_init_device
+		mca_btl_ofi_module_alloc
+			mca_btl_ofi_flush
+
+
+MPI_Comm_rank -> 此函数使用户能够通过单个函数调用检索进程排名。 否则，必须使用 MPI_Comm_group 函数创建一个临时组，使用 MPI_Group_rank 函数获取组中的排名，然后使用 MPI_Group_free 函数释放临时组
+MPI_Start -> 启动与持久请求句柄的通信
+MPI_Test -> 测试未完成的操作以完成
+
+
+
+MPI_Init_thread
+	ompi_hook_base_mpi_init_thread_top
+	ompi_mpi_init
+	ompi_errhandler_invoke 
+	ompi_hook_base_mpi_init_thread_bottom
+
+mca, 模块化组件架构(Modular Component Architecture)
+
